@@ -19,85 +19,86 @@
 
 package io.milvus.client;
 
+import io.milvus.client.Index.Builder;
+import java.util.List;
+import java.util.Map;
 import javax.annotation.Nonnull;
 
 /** Represents a collection mapping */
 // Builder Pattern
 public class CollectionMapping {
   private final String collectionName;
-  private final long dimension;
-  private final long indexFileSize;
-  private final MetricType metricType;
+  private final List<? extends Map<String, Object>> fields;
+  private final String paramsInJson;
 
   private CollectionMapping(@Nonnull Builder builder) {
     collectionName = builder.collectionName;
-    dimension = builder.dimension;
-    indexFileSize = builder.indexFileSize;
-    metricType = builder.metricType;
+    fields = builder.fields;
+    paramsInJson = builder.paramsInJson;
   }
 
   public String getCollectionName() {
     return collectionName;
   }
 
-  public long getDimension() {
-    return dimension;
+  public List<? extends Map<String, Object>> getFields() {
+    return fields;
   }
 
-  public long getIndexFileSize() {
-    return indexFileSize;
-  }
-
-  public MetricType getMetricType() {
-    return metricType;
+  public String getParamsInJson() {
+    return paramsInJson;
   }
 
   @Override
   public String toString() {
     return String.format(
-        "CollectionMapping = {collectionName = %s, dimension = %d, indexFileSize = %d, metricType = %s}",
-        collectionName, dimension, indexFileSize, metricType.name());
+        "CollectionMapping = {collectionName = %s, fields = %s, params = %s}",
+        collectionName, fields.toString(), paramsInJson);
   }
 
   /** Builder for <code>CollectionMapping</code> */
   public static class Builder {
     // Required parameters
     private final String collectionName;
-    private final long dimension;
-
-    // Optional parameters - initialized to default values
-    private long indexFileSize = 1024;
-    private MetricType metricType = MetricType.L2;
+    private List<? extends Map<String, Object>> fields;
+    private String paramsInJson;
 
     /**
      * @param collectionName collection name
-     * @param dimension vector dimension
      */
-    public Builder(@Nonnull String collectionName, long dimension) {
+    public Builder(@Nonnull String collectionName) {
       this.collectionName = collectionName;
-      this.dimension = dimension;
     }
 
     /**
-     * Optional. Default to 1024 MB.
+     * Build with fields. Example fields:
+     * ` {"fields": [
+     *      {"field": "A", "type": DataType.INT64, "index": {"name":"","type":"","params": {..}}},
+     *      {"field": "B", "type": DataType.INT64},
+     *      {"field": "C", "type": DataType.INT64},
+     *      {"field": "Vec", "type": DataType.BINARY_VECTOR,
+     *       "params": {"metric_type": MetricType.L2, "dim": 128}}
+     *    ]}`
      *
-     * @param indexFileSize in megabytes.
+     * @param fields a list of hashmap containing each field. A field must have key "field" and
+     *               "type". A vector field must have "dim" in params. "params" should be in json
+     *               format.
      * @return <code>Builder</code>
      */
-    public Builder withIndexFileSize(long indexFileSize) {
-      this.indexFileSize = indexFileSize;
+    public Builder withFields(@Nonnull List<? extends Map<String, Object>> fields) {
+      this.fields = fields;
       return this;
     }
 
     /**
-     * Optional. Default to MetricType.L2
+     * Build with extra params in json string format.
      *
-     * @param metricType a <code>MetricType</code> value
+     * @param paramsInJson can optionally include "segment_row_count", merge will be triggered if
+     *                     more than this number of rows inserted.
      * @return <code>Builder</code>
-     * @see MetricType
      */
-    public Builder withMetricType(@Nonnull MetricType metricType) {
-      this.metricType = metricType;
+    public Builder withParamsInJson(String paramsInJson) {
+      this.paramsInJson = paramsInJson;
       return this;
     }
 

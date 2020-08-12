@@ -537,17 +537,6 @@ class MilvusClientTest {
   }
 
   @org.junit.jupiter.api.Test
-  void getIndexInfo() {
-    createIndex();
-
-    GetIndexInfoResponse getIndexInfoResponse = client.getIndexInfo(randomCollectionName);
-    assertTrue(getIndexInfoResponse.ok());
-    assertTrue(getIndexInfoResponse.getIndex().isPresent());
-    assertEquals(getIndexInfoResponse.getIndex().get().getCollectionName(), randomCollectionName);
-    assertEquals(getIndexInfoResponse.getIndex().get().getIndexType(), IndexType.IVF_SQ8);
-  }
-
-  @org.junit.jupiter.api.Test
   void dropIndex() {
     Response dropIndexResponse = client.dropIndex(randomCollectionName);
     assertTrue(dropIndexResponse.ok());

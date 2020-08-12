@@ -128,10 +128,6 @@ public class MilvusClientExample {
             .build();
     Response createIndexResponse = client.createIndex(index);
 
-    // Get index info for your collection
-    GetIndexInfoResponse getIndexInfoResponse = client.getIndexInfo(collectionName);
-    System.out.format("Index Info: %s\n", getIndexInfoResponse.getIndex().get().toString());
-
     // Get collection info
     Response getCollectionStatsResponse = client.getCollectionStats(collectionName);
     if (getCollectionStatsResponse.ok()) {

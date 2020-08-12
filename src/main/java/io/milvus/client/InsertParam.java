@@ -19,24 +19,22 @@
 
 package io.milvus.client;
 
+import java.util.Map;
 import javax.annotation.Nonnull;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
 /** Contains parameters for <code>insert</code> */
 public class InsertParam {
   private final String collectionName;
-  private final List<List<Float>> floatVectors;
-  private final List<ByteBuffer> binaryVectors;
-  private final List<Long> vectorIds;
+  private final List<? extends Map<String, Object>> fields;
+  private final List<Long> entityIds;
   private final String partitionTag;
 
   private InsertParam(@Nonnull Builder builder) {
     this.collectionName = builder.collectionName;
-    this.floatVectors = builder.floatVectors;
-    this.binaryVectors = builder.binaryVectors;
-    this.vectorIds = builder.vectorIds;
+    this.fields = builder.fields;
+    this.entityIds = builder.entityIds;
     this.partitionTag = builder.partitionTag;
   }
 
@@ -44,16 +42,10 @@ public class InsertParam {
     return collectionName;
   }
 
-  public List<List<Float>> getFloatVectors() {
-    return floatVectors;
-  }
+  public List<? extends Map<String, Object>> getFields() { return fields; }
 
-  public List<ByteBuffer> getBinaryVectors() {
-    return binaryVectors;
-  }
-
-  public List<Long> getVectorIds() {
-    return vectorIds;
+  public List<Long> getEntityIds() {
+    return entityIds;
   }
 
   public String getPartitionTag() {
@@ -66,51 +58,48 @@ public class InsertParam {
     private final String collectionName;
 
     // Optional parameters - initialized to default values
-    private List<List<Float>> floatVectors = new ArrayList<>();
-    private List<ByteBuffer> binaryVectors = new ArrayList<>();
-    private List<Long> vectorIds = new ArrayList<>();
+    private List<? extends Map<String, Object>> fields = new ArrayList<>();
+    private List<Long> entityIds = new ArrayList<>();
     private String partitionTag = "";
 
-    /** @param collectionName collection to insert vectors to */
+    /** @param collectionName collection to insert entities to */
     public Builder(@Nonnull String collectionName) {
       this.collectionName = collectionName;
     }
 
     /**
-     * Default to an empty <code>ArrayList</code>. You can only insert either float or binary
-     * vectors to a collection, not both.
+     * The data you wish to insert into collections. Default to an empty <code>ArrayList</code>
      *
-     * @param floatVectors a <code>List</code> of float vectors to insert. Each inner <code>List
-     *     </code> represents a float vector.
+     * @param fields a <code>List</code> of <code>Map</code> that contains data to insert for each
+     *     field name. "field", "values" and "type" must be present in each map. Size of
+     *     map["values"] must match for all maps in the list, which is equivalent to entity count.
+     *     Example fields:
+     *     <pre>
+     * <code>
+     *   [
+     *         {"field": "A", "values": A_list, "type": DataType.INT32},
+     *         {"field": "B", "values": A_list, "type": DataType.INT32},
+     *         {"field": "C", "values": A_list, "type": DataType.INT64},
+     *         {"field": "Vec", "values": vec, "type": DataType.FLOAT_VECTOR}
+     *   ]
+     * </code>
+     * </pre>
+     *
      * @return <code>Builder</code>
      */
-    public Builder withFloatVectors(@Nonnull List<List<Float>> floatVectors) {
-      this.floatVectors = floatVectors;
-      return this;
-    }
-
-    /**
-     * Default to an empty <code>ArrayList</code>. You can only insert either float or binary
-     * vectors to a collection, not both.
-     *
-     * @param binaryVectors a <code>List</code> of binary vectors to insert. Each <code>ByteBuffer
-     *     </code> object represents a binary vector, with every 8 bits constituting a byte.
-     * @return <code>Builder</code>
-     * @see ByteBuffer
-     */
-    public Builder withBinaryVectors(@Nonnull List<ByteBuffer> binaryVectors) {
-      this.binaryVectors = binaryVectors;
+    public Builder withFields(@Nonnull List<? extends Map<String, Object>> fields) {
+      this.fields = fields;
       return this;
     }
 
     /**
      * Optional. Default to an empty <code>ArrayList</code>
      *
-     * @param vectorIds a <code>List</code> of ids associated with the vectors to insert
+     * @param entityIds a <code>List</code> of ids associated with the entities to insert
      * @return <code>Builder</code>
      */
-    public Builder withVectorIds(@Nonnull List<Long> vectorIds) {
-      this.vectorIds = vectorIds;
+    public Builder withEntityIds(@Nonnull List<Long> entityIds) {
+      this.entityIds = entityIds;
       return this;
     }
 

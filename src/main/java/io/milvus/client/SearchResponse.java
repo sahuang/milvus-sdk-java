@@ -20,6 +20,7 @@
 package io.milvus.client;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -35,6 +36,7 @@ public class SearchResponse {
   private long topK;
   private List<List<Long>> resultIdsList;
   private List<List<Float>> resultDistancesList;
+  private List<Map<String, Object>> fieldsMap;
 
   public int getNumQueries() {
     return numQueries;
@@ -83,7 +85,7 @@ public class SearchResponse {
   }
 
   /**
-   * @return @return a <code>List</code> of result distances. Each inner <code>List</code> contains
+   * @return a <code>List</code> of result distances. Each inner <code>List</code> contains
    *     the result distances of a vector.
    */
   public List<List<Float>> getResultDistancesList() {
@@ -100,6 +102,18 @@ public class SearchResponse {
 
   void setResponse(Response response) {
     this.response = response;
+  }
+
+  /**
+   * @return A <code>List</code> of map with fields information. The list order corresponds
+   * to <code>resultIdsList</code>. The inner <code>Map</code> maps field names to records.
+   * The record object can be one of int, long, float, double, List<Float> or List<ByteBuffer>
+   *   depending on the field's DataType you specified.
+   */
+  public List<Map<String, Object>> getFieldsMap() { return fieldsMap; }
+
+  void setFieldsMap(List<Map<String, Object>> fieldsMap) {
+    this.fieldsMap = fieldsMap;
   }
 
   /** @return <code>true</code> if the response status equals SUCCESS */

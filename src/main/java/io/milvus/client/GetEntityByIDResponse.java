@@ -30,7 +30,7 @@ public class GetEntityByIDResponse {
   /**
    * @return A <code>List</code> of map with fields information. The list order corresponds
    * to <code>validIds</code>. The inner <code>Map</code> maps field names to records.
-   * The record object can be one of int, long, float, double, List<Float> or List<ByteBuffer>
+   * The record object can be one of int, long, float, double, List<Float> or ByteBuffer
    *   depending on the field's DataType you specified.
    */
   public List<Map<String, Object>> getFieldsMap() { return fieldsMap; }

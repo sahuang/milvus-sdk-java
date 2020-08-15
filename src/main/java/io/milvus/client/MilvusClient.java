@@ -196,8 +196,8 @@ public interface MilvusClient {
    * example usage:
    * <code>
    * InsertParam insertParam = new InsertParam.Builder(collectionName)
-   *                                          .withFloatVectors(floatVectors)
-   *                                          .withVectorIds(vectorIds)
+   *                                          .withFields(fields)
+   *                                          .withEntityIds(entityIds)
    *                                          .withPartitionTag(tag)
    *                                          .build();
    * </code>
@@ -218,8 +218,8 @@ public interface MilvusClient {
    * example usage:
    * <code>
    * InsertParam insertParam = new InsertParam.Builder(collectionName)
-   *                                          .withFloatVectors(floatVectors)
-   *                                          .withVectorIds(vectorIds)
+   *                                          .withFields(fields)
+   *                                          .withEntityIds(entityIds)
    *                                          .withPartitionTag(tag)
    *                                          .build();
    * </code>

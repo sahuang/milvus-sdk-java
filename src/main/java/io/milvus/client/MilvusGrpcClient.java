@@ -29,8 +29,6 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.milvus.grpc.*;
-import io.milvus.grpc.AttrRecord.Builder;
-import java.lang.reflect.Array;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -42,7 +40,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import javax.annotation.Nonnull;
-import netscape.javascript.JSObject;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -104,7 +101,7 @@ public class MilvusGrpcClient implements MilvusClient {
 
       // check server version
       String serverVersion = getServerVersion().getMessage();
-      if (!serverVersion.contains("0.11.")) {
+      if (!serverVersion.contains("0.10.")) {
         logError(
             "Connect failed! Server version {} does not match SDK version 0.9.0", serverVersion);
         throw new ConnectFailedException("Failed to connect to Milvus server.");
@@ -153,39 +150,23 @@ public class MilvusGrpcClient implements MilvusClient {
       return new Response(Response.Status.CLIENT_NOT_CONNECTED);
     }
 
-    List<KeyValuePair> extraParams = new ArrayList<>();
-
-    try {
-      JSONObject jsonInfo = new JSONObject(collectionMapping.getParamsInJson());
-      Iterator<String> keys = jsonInfo.keys();
-      while (keys.hasNext()) {
-        String key = keys.next();
-        if (jsonInfo.get(key) instanceof String) {
-          KeyValuePair extraParam = KeyValuePair.newBuilder()
-              .setKey(key)
-              .setValue(jsonInfo.get(key).toString())
-              .build();
-          extraParams.add(extraParam);
-        }
-      }
-    } catch (JSONException err){
-      logError("Params must be in json format. `{}`", err.toString());
+    List<FieldParam> fields = new ArrayList<>();
+    if (collectionMapping.getFields().size() == 0) {
+      logError("Param fields must not be empty.");
       return new Response(Response.Status.ILLEGAL_ARGUMENT);
     }
-
-    List<FieldParam> fields = new ArrayList<>();
     for (Map<String, Object> map : collectionMapping.getFields()) {
       if (!map.containsKey("field") || !(map.get("field") instanceof String)) {
         logError("Param fields must contain key 'field' of String.");
-        return new Response(Response.Status.META_FAILED);
+        return new Response(Response.Status.ILLEGAL_ARGUMENT);
       }
       if (!map.containsKey("type") || !(map.get("type") instanceof DataType)) {
         logError("Param fields must contain key 'type' of DataType.");
-        return new Response(Response.Status.META_FAILED);
+        return new Response(Response.Status.ILLEGAL_ARGUMENT);
       }
       io.milvus.grpc.FieldParam.Builder fieldParamBuilder = FieldParam.newBuilder()
           .setName(map.get("field").toString())
-          .setType((DataType) map.get("type"));
+          .setTypeValue(((DataType) map.get("type")).getVal());
       if (map.containsKey(extraParamKey)) {
         KeyValuePair extraFieldParam = KeyValuePair.newBuilder()
             .setKey(extraParamKey)
@@ -200,7 +181,10 @@ public class MilvusGrpcClient implements MilvusClient {
         Mapping.newBuilder()
             .setCollectionName(collectionMapping.getCollectionName())
             .addAllFields(fields)
-            .addAllExtraParams(extraParams)
+            .addExtraParams(KeyValuePair.newBuilder()
+                .setKey(extraParamKey)
+                .setValue(collectionMapping.getParamsInJson())
+                .build())
             .build();
 
     Status response;
@@ -303,13 +287,11 @@ public class MilvusGrpcClient implements MilvusClient {
       Iterator<String> keys = jsonInfo.keys();
       while (keys.hasNext()) {
         String key = keys.next();
-        if (jsonInfo.get(key) instanceof String) {
-          KeyValuePair extraParam = KeyValuePair.newBuilder()
-              .setKey(key)
-              .setValue(jsonInfo.get(key).toString())
-              .build();
-          extraParams.add(extraParam);
-        }
+        KeyValuePair extraParam = KeyValuePair.newBuilder()
+            .setKey(key)
+            .setValue(jsonInfo.get(key).toString())
+            .build();
+        extraParams.add(extraParam);
       }
     } catch (JSONException err){
       logError("Params must be in json format.\n`{}`", err.toString());
@@ -357,13 +339,11 @@ public class MilvusGrpcClient implements MilvusClient {
       Iterator<String> keys = jsonInfo.keys();
       while (keys.hasNext()) {
         String key = keys.next();
-        if (jsonInfo.get(key) instanceof String) {
-          KeyValuePair extraParam = KeyValuePair.newBuilder()
-              .setKey(key)
-              .setValue(jsonInfo.get(key).toString())
-              .build();
-          extraParams.add(extraParam);
-        }
+        KeyValuePair extraParam = KeyValuePair.newBuilder()
+            .setKey(key)
+            .setValue(jsonInfo.get(key).toString())
+            .build();
+        extraParams.add(extraParam);
       }
     } catch (JSONException err){
       logError("Params must be in json format.\n`{}`", err.toString());
@@ -569,7 +549,6 @@ public class MilvusGrpcClient implements MilvusClient {
         return new InsertResponse(
             new Response(Response.Status.ILLEGAL_ARGUMENT), Collections.emptyList());
       }
-      String fieldName = map.get("field").toString();
       DataType dataType = (DataType) map.get("type");
       AttrRecord.Builder attrBuilder = AttrRecord.newBuilder();
       VectorRecord.Builder vectorBuilder = VectorRecord.newBuilder();
@@ -594,8 +573,8 @@ public class MilvusGrpcClient implements MilvusClient {
       } else if (dataType == DataType.VECTOR_BINARY) {
         List<ByteBuffer> binaryList = (List<ByteBuffer>) map.get("values");
         List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-        for (int j = 0; j < binaryList.size(); i++) {
-          (binaryList.get(j)).rewind();
+        for (int j = 0; j < binaryList.size(); j++) {
+          ((Buffer) binaryList.get(j)).rewind();
           vectorRowRecordList.add(
               VectorRowRecord.newBuilder()
                   .setBinaryData(ByteString.copyFrom(binaryList.get(j)))
@@ -614,7 +593,7 @@ public class MilvusGrpcClient implements MilvusClient {
       FieldValue fieldValue =
           FieldValue.newBuilder()
               .setFieldName(map.get("field").toString())
-              .setType((DataType) map.get("type"))
+              .setTypeValue(((DataType) map.get("type")).getVal())
               .setAttrRecord(attrRecord)
               .setVectorRecord(vectorRecord)
               .build();
@@ -703,8 +682,8 @@ public class MilvusGrpcClient implements MilvusClient {
       } else if (dataType == DataType.VECTOR_BINARY) {
         List<ByteBuffer> binaryList = (List<ByteBuffer>) map.get("values");
         List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-        for (int j = 0; j < binaryList.size(); i++) {
-          (binaryList.get(j)).rewind();
+        for (int j = 0; j < binaryList.size(); j++) {
+          ((Buffer) binaryList.get(j)).rewind();
           vectorRowRecordList.add(
               VectorRowRecord.newBuilder()
                   .setBinaryData(ByteString.copyFrom(binaryList.get(j)))
@@ -724,7 +703,7 @@ public class MilvusGrpcClient implements MilvusClient {
       FieldValue fieldValue =
           FieldValue.newBuilder()
               .setFieldName(map.get("field").toString())
-              .setType((DataType) map.get("type"))
+              .setTypeValue(((DataType) map.get("type")).getVal())
               .setAttrRecord(attrRecord)
               .setVectorRecord(vectorRecord)
               .build();
@@ -795,17 +774,22 @@ public class MilvusGrpcClient implements MilvusClient {
     // convert DSL to json object and parse to extract vectors
     List<VectorParam> vectorParamList = new ArrayList<>();
     Map<String, JSONObject> vecMap = new HashMap<>();
-    Integer currKey = 0;
+    Map<String, String> nameMap = new HashMap<>();
+    int currKey = 0;
     JSONObject json1;
     try {
+      System.out.println(searchParam.getDSL());
       json1 = new JSONObject(searchParam.getDSL());
+      System.out.println("json1 = " + json1.toString());
       Iterator<String> keys1 = json1.keys();
       while (keys1.hasNext()) {
         String key1 = keys1.next(); // "bool"
+        System.out.println("key1 = " + key1.toString());
         JSONObject json2 = (JSONObject) json1.get(key1);
         Iterator<String> keys2 = json2.keys();
         while (keys2.hasNext()) {
           String key2 = keys2.next(); // "must"
+          System.out.println("key2 = " + key2.toString());
           JSONArray json3 = (JSONArray) json2.get(key2);
           // loop over array of "term", "range" and "vector"
           for (int i = 0; i < json3.length(); i++) {
@@ -813,11 +797,15 @@ public class MilvusGrpcClient implements MilvusClient {
             Iterator<String> keys4 = json4.keys();
             while (keys4.hasNext()) {
               String key4 = keys4.next(); // term/range/vector
-              if (key4 != "vector") continue;
+              System.out.println("key4 = " + key4.toString());
+              if (!key4.equals("vector")) continue;
               JSONObject json5 = (JSONObject) json4.get(key4);
+              System.out.println("json5 = " + json5.toString());
               // replace JSONObject by a placeholder string
-              vecMap.put(currKey.toString(), json5);
-              json4.put(key4, currKey.toString());
+              vecMap.put(Integer.toString(currKey), new JSONObject(json5.toString()));
+              Iterator<String> keys5 = json5.keys();
+              nameMap.put(Integer.toString(currKey), keys5.next());
+              json4.put(key4, Integer.toString(currKey));
               currKey++;
             }
           }
@@ -830,10 +818,13 @@ public class MilvusGrpcClient implements MilvusClient {
       return searchResponse;
     }
 
+    System.out.println("DSL = " + json1.toString());
+
     // use placeholder and vectors to create VectorParam list
     for (Map.Entry<String, JSONObject> entry : vecMap.entrySet()) {
       String key = entry.getKey();
-      JSONObject value = entry.getValue();
+      JSONObject value = (JSONObject) entry.getValue().get(nameMap.get(key));
+      System.out.println("entryset = " + value.toString());
       if (!value.has("topk") || !value.has("query") || !value.has("type")) {
         logError("Invalid DSL vector field argument. Refer to examples for more information.");
         SearchResponse searchResponse = new SearchResponse();
@@ -842,19 +833,35 @@ public class MilvusGrpcClient implements MilvusClient {
       }
       List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
       if (value.get("type").toString().equals("float")) {
-        List<List<Float>> floatList = (List<List<Float>>) value.get("query");
-        for (int i = 0; i < floatList.size(); i++) {
+        JSONArray arr = (JSONArray) value.get("query");
+        for (int i = 0; i < arr.length(); i++) {
+          JSONArray innerArr = (JSONArray) (arr.get(i));
+          List<Float> floatList = new ArrayList<>();
+          for (int j = 0; j < innerArr.length(); j++) {
+            Double num = (Double) innerArr.get(j);
+            floatList.add(num.floatValue());
+          }
           VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-              .addAllFloatData(floatList.get(i))
+              .addAllFloatData(floatList)
               .build();
           vectorRowRecordList.add(rowRecord);
         }
       } else if (value.get("type").toString().equals("binary")) {
-        List<ByteBuffer> binaryList = (List<ByteBuffer>) value.get("query");
-        for (int i = 0; i < binaryList.size(); i++) {
-          (binaryList.get(i)).rewind();
+        // get from placeholder map
+        Map<String, List<ByteBuffer>> binaryEntities = searchParam.getBinaryEntities();
+        String placeholder = value.get("query").toString();
+        if (!binaryEntities.containsKey(placeholder)) {
+          logError("Binary query vector placeholder `{}` not found in map"
+              + ". Refer to examples for more information.", placeholder);
+          SearchResponse searchResponse = new SearchResponse();
+          searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+          return searchResponse;
+        }
+        List<ByteBuffer> query = binaryEntities.get(placeholder);
+        for (ByteBuffer byteBuffer : query) {
+          ((Buffer) byteBuffer).rewind();
           VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-              .setBinaryData(ByteString.copyFrom(binaryList.get(i)))
+              .setBinaryData(ByteString.copyFrom(byteBuffer))
               .build();
           vectorRowRecordList.add(rowRecord);
         }
@@ -873,7 +880,8 @@ public class MilvusGrpcClient implements MilvusClient {
       JSONObject jsonObject = new JSONObject();
       value.remove("type");
       value.remove("query");
-      jsonObject.put(key, value.toString());
+      jsonObject.put(key, entry.getValue());
+      System.out.println("json string = " + jsonObject.toString());
       VectorParam vectorParam =
           VectorParam.newBuilder()
               .setJson(jsonObject.toString())
@@ -939,17 +947,21 @@ public class MilvusGrpcClient implements MilvusClient {
     // convert DSL to json object and parse to extract vectors
     List<VectorParam> vectorParamList = new ArrayList<>();
     Map<String, JSONObject> vecMap = new HashMap<>();
+    Map<String, String> nameMap = new HashMap<>();
     Integer currKey = 0;
     JSONObject json1;
     try {
       json1 = new JSONObject(searchParam.getDSL());
+      System.out.println("json1 = " + json1.toString());
       Iterator<String> keys1 = json1.keys();
       while (keys1.hasNext()) {
         String key1 = keys1.next(); // "bool"
+        System.out.println("key1 = " + key1.toString());
         JSONObject json2 = (JSONObject) json1.get(key1);
         Iterator<String> keys2 = json2.keys();
         while (keys2.hasNext()) {
           String key2 = keys2.next(); // "must"
+          System.out.println("key2 = " + key2.toString());
           JSONArray json3 = (JSONArray) json2.get(key2);
           // loop over array of "term", "range" and "vector"
           for (int i = 0; i < json3.length(); i++) {
@@ -957,10 +969,14 @@ public class MilvusGrpcClient implements MilvusClient {
             Iterator<String> keys4 = json4.keys();
             while (keys4.hasNext()) {
               String key4 = keys4.next(); // term/range/vector
-              if (key4 != "vector") continue;
+              System.out.println("key4 = " + key4.toString());
+              if (!key4.equals("vector")) continue;
               JSONObject json5 = (JSONObject) json4.get(key4);
+              System.out.println("json5 = " + json5.toString());
               // replace JSONObject by a placeholder string
-              vecMap.put(currKey.toString(), json5);
+              vecMap.put(currKey.toString(), new JSONObject(json5.toString()));
+              Iterator<String> keys5 = json5.keys();
+              nameMap.put(currKey.toString(), keys5.next());
               json4.put(key4, currKey.toString());
               currKey++;
             }
@@ -974,10 +990,13 @@ public class MilvusGrpcClient implements MilvusClient {
       return Futures.immediateFuture(searchResponse);
     }
 
+    System.out.println("DSL = " + json1.toString());
+
     // use placeholder and vectors to create VectorParam list
     for (Map.Entry<String, JSONObject> entry : vecMap.entrySet()) {
       String key = entry.getKey();
-      JSONObject value = entry.getValue();
+      JSONObject value = (JSONObject) entry.getValue().get(nameMap.get(key));
+      System.out.println("entryset = " + value.toString());
       if (!value.has("topk") || !value.has("query") || !value.has("type")) {
         logError("Invalid DSL vector field argument. Refer to examples for more information.");
         SearchResponse searchResponse = new SearchResponse();
@@ -986,19 +1005,35 @@ public class MilvusGrpcClient implements MilvusClient {
       }
       List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
       if (value.get("type").toString().equals("float")) {
-        List<List<Float>> floatList = (List<List<Float>>) value.get("query");
-        for (int i = 0; i < floatList.size(); i++) {
+        JSONArray arr = (JSONArray) value.get("query");
+        for (int i = 0; i < arr.length(); i++) {
+          JSONArray innerArr = (JSONArray) (arr.get(i));
+          List<Float> floatList = new ArrayList<>();
+          for (int j = 0; j < innerArr.length(); j++) {
+            Double num = (Double) innerArr.get(j);
+            floatList.add(num.floatValue());
+          }
           VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-              .addAllFloatData(floatList.get(i))
+              .addAllFloatData(floatList)
               .build();
           vectorRowRecordList.add(rowRecord);
         }
       } else if (value.get("type").toString().equals("binary")) {
-        List<ByteBuffer> binaryList = (List<ByteBuffer>) value.get("query");
-        for (int i = 0; i < binaryList.size(); i++) {
-          (binaryList.get(i)).rewind();
+        // get from placeholder map
+        Map<String, List<ByteBuffer>> binaryEntities = searchParam.getBinaryEntities();
+        String placeholder = value.get("query").toString();
+        if (!binaryEntities.containsKey(placeholder)) {
+          logError("Binary query vector placeholder `{}` not found in map"
+              + ". Refer to examples for more information.", placeholder);
+          SearchResponse searchResponse = new SearchResponse();
+          searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+          return Futures.immediateFuture(searchResponse);
+        }
+        List<ByteBuffer> query = binaryEntities.get(placeholder);
+        for (ByteBuffer byteBuffer : query) {
+          ((Buffer) byteBuffer).rewind();
           VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-              .setBinaryData(ByteString.copyFrom(binaryList.get(i)))
+              .setBinaryData(ByteString.copyFrom(byteBuffer))
               .build();
           vectorRowRecordList.add(rowRecord);
         }
@@ -1017,7 +1052,8 @@ public class MilvusGrpcClient implements MilvusClient {
       JSONObject jsonObject = new JSONObject();
       value.remove("type");
       value.remove("query");
-      jsonObject.put(key, value.toString());
+      jsonObject.put(key, entry.getValue());
+      System.out.println("json string = " + jsonObject.toString());
       VectorParam vectorParam =
           VectorParam.newBuilder()
               .setJson(jsonObject.toString())

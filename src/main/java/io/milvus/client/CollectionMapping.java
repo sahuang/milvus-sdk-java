@@ -20,6 +20,7 @@
 package io.milvus.client;
 
 import io.milvus.client.Index.Builder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nonnull;
@@ -60,8 +61,10 @@ public class CollectionMapping {
   public static class Builder {
     // Required parameters
     private final String collectionName;
-    private List<? extends Map<String, Object>> fields;
-    private String paramsInJson;
+
+    // Optional parameters. Default to empty.
+    private List<? extends Map<String, Object>> fields = new ArrayList<>();
+    private String paramsInJson = "{}";
 
     /**
      * @param collectionName collection name

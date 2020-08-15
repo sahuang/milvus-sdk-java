@@ -72,7 +72,7 @@ public class Index {
     private final String fieldName;
 
     // Optional parameters - initialized to default values
-    private String paramsInJson;
+    private String paramsInJson = "{}";
     private String indexName = "";
 
     /**

@@ -583,9 +583,9 @@ service MilvusService {
     rpc GetEntityByID(EntityIdentity) returns (Entities) {}
 
     /**
-     * @brief This method is used to get vector ids from a segment
+     * @brief This method is used to get entity ids from a segment
      *
-     * @param GetVectorIDsParam, target collection and segment
+     * @param GetEntityIDsParam, target collection and segment
      *
      * @return EntityIds
      */

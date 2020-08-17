@@ -63,7 +63,7 @@ public interface MilvusClient {
    * Disconnects from Milvus server
    *
    * @return <code>Response</code>
-   * @throws InterruptedException
+   * @throws InterruptedException if disconnect interrupted
    * @see Response
    */
   Response disconnect() throws InterruptedException;
@@ -80,7 +80,7 @@ public interface MilvusClient {
    *                                          .withParamsInJson("{\"segment_row_count\": 100000}")
    *                                          .build();
    * </code>
-   * Refer to <code>withFields</code> method for example <code>fields</code>" usage.
+   * Refer to <code>withFields</code> method for example <code>fields</code> usage.
    * </pre>
    *
    * @return <code>Response</code>
@@ -117,7 +117,8 @@ public interface MilvusClient {
    * <code>
    * Index index = new Index.Builder(collectionName, fieldName)
    *                        .withParamsInJson(
-   *                            "{\"index_type\": "IVFLAT", \"params\": {\"nlist\": 16384}}")
+   *                            "{\"index_type\": "IVF_FLAT", \"metric_type\": "L2",
+   *                             \"params\": {\"nlist\": 16384}}")
    *                        .build();
    * </code>
    * </pre>
@@ -137,7 +138,8 @@ public interface MilvusClient {
    * <code>
    * Index index = new Index.Builder(collectionName, fieldName)
    *                        .withParamsInJson(
-   *                            "{\"index_type\": "IVFLAT", \"params\": {\"nlist\": 16384}}")
+   *                            "{\"index_type\": "IVF_FLAT", \"metric_type\": "L2",
+   *                             \"params\": {\"nlist\": 16384}}")
    *                        .build();
    * </code>
    * </pre>
@@ -284,6 +286,7 @@ public interface MilvusClient {
    * Gets collection info
    *
    * @param collectionName collection to describe
+   * @return <code>GetCollectionInfoResponse</code>
    * @see GetCollectionInfoResponse
    * @see CollectionMapping
    * @see Response

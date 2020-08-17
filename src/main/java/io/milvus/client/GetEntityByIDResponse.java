@@ -1,14 +1,11 @@
 package io.milvus.client;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Contains the returned <code>response</code> and either a <code>List</code> of <code>floatVectors
- * </code> or <code>
- * binaryVectors</code> for <code>getEntityByID</code>. If the id does not exist, both float and
- * binary vectors corresponding to the id will be empty.
+ * Contains the returned <code>response</code>, valid ids within query and a <code>list</code> of
+ * fields map for <code>getEntityByID</code>.
  */
 public class GetEntityByIDResponse {
   private final Response response;
@@ -29,9 +26,9 @@ public class GetEntityByIDResponse {
 
   /**
    * @return A <code>List</code> of map with fields information. The list order corresponds
-   * to <code>validIds</code>. The inner <code>Map</code> maps field names to records.
+   * to <code>validIds</code>. Each <code>Map</code> maps field names to records in a row.
    * The record object can be one of int, long, float, double, List<Float> or ByteBuffer
-   *   depending on the field's DataType you specified.
+   *   depending on the field's <code>DataType</code> you specified.
    */
   public List<Map<String, Object>> getFieldsMap() { return fieldsMap; }
 

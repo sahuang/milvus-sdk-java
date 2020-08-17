@@ -563,7 +563,7 @@ class MilvusClientTest {
     final double epsilon = 0.001;
     for (int i = 0; i < searchSize; i++) {
       SearchResponse.QueryResult firstQueryResult = queryResultsList.get(i).get(0);
-      assertEquals(entityIds.get(i), firstQueryResult.getVectorId());
+      assertEquals(entityIds.get(i), firstQueryResult.getEntityId());
       assertEquals(entityIds.get(i), resultIdsList.get(i).get(0));
       assertTrue(Math.abs(firstQueryResult.getDistance()) < epsilon);
       assertTrue(Math.abs(resultDistancesList.get(i).get(0)) < epsilon);
@@ -635,7 +635,7 @@ class MilvusClientTest {
     final double epsilon = 0.001;
     for (int i = 0; i < searchSize; i++) {
       SearchResponse.QueryResult firstQueryResult = queryResultsList.get(i).get(0);
-      assertEquals(entityIds.get(i), firstQueryResult.getVectorId());
+      assertEquals(entityIds.get(i), firstQueryResult.getEntityId());
       assertEquals(entityIds.get(i), resultIdsList.get(i).get(0));
       assertTrue(Math.abs(firstQueryResult.getDistance()) < epsilon);
       assertTrue(Math.abs(resultDistancesList.get(i).get(0)) < epsilon);
@@ -735,7 +735,7 @@ class MilvusClientTest {
 
     for (int i = 0; i < searchSize; i++) {
       SearchResponse.QueryResult firstQueryResult = queryResultsList.get(i).get(0);
-      assertEquals(entityIds.get(i), firstQueryResult.getVectorId());
+      assertEquals(entityIds.get(i), firstQueryResult.getEntityId());
       assertEquals(entityIds.get(i), resultIdsList.get(i).get(0));
     }
 

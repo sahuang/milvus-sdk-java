@@ -61,7 +61,7 @@ public class SearchParam {
 
   /** Builder for <code>SearchParam</code> */
   public static class Builder {
-    // Required parameters
+    // Required parameter
     private final String collectionName;
 
     // Optional parameters - initialized to default values
@@ -109,10 +109,10 @@ public class SearchParam {
      * </pre>
      *
      * Note that "vector" must be included in DSL. The "params" in "Vec" is different for different
-     * index types. Refer to Milvus documentation for more information.
+     * index types. Refer to Milvus documentation for more information about DSL.
      *
      * A "type" key must be present in "Vec" field to indicate whether your query vectors are
-     * "float" or "binary" type.
+     * "float" or "binary".
      *
      * @param dsl The DSL String in JSON format
      * @return <code>Builder</code>
@@ -124,22 +124,23 @@ public class SearchParam {
 
     /**
      * Optional. Default to empty map. Due to the nature of <code>ByteBuffer</code>, it is not
-     * feasible to pass binary entities as query vectors when building <code>SearchParam</code>
-     * with DSL statement. Strings cannot be converted back to List<ByteBuffer>.
+     * feasible to pass binary entities as query vectors in DSL statement.
+     * JSON strings cannot be parsed back to <code>List<ByteBuffer></code> object.
      *
      * The map will take user-defined name (placeholder) as the key, and list of query vectors as
-     * the value. When building DSL statement, use the placehold instead of raw entities in "query".
+     * the value. When building DSL statement, use the placeholder instead of raw entities in "query".
      * For example, for float vectors we have
      * <code>
-     *   {"topk": 10, "type": "float", "query": list_of_vecs, "params": {"nprobe": 10}}
+     *   {"topk": 10, "type": "float", "query": vecs, "params": {"nprobe": 10}}
      * </code>
      * While for binary vectors we have
      * <code>
      *   {"topk": 10, "type": "binary", "query": "placeholder", "params": {"nprobe": 10}}
      * </code>
-     * And in <code>binaryEntities</code>, we have a key-value pair of <"placeholder", list_of_vecs>.
+     * And in <code>binaryEntities</code>, we have a key-value pair of ("placeholder", vecs).
      *
-     * @param binaryEntities a <code>Map</code> of placeholders to query vecctors
+     * @param binaryEntities a <code>Map</code> of placeholders to query binary vectors. If using
+     *                       float data, this builder is not needed.
      * @return <code>Builder</code>
      */
     public SearchParam.Builder withBinaryEntities(@Nonnull Map<String, List<ByteBuffer>> binaryEntities) {

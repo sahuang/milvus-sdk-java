@@ -41,10 +41,10 @@ public class CompactParam {
 
   /** Builder for <code>CompactParam</code> */
   public static class Builder {
-    // Required parameters
+    // Required parameter
     private final String collectionName;
 
-    // Optional parameters - initialized to default values
+    // Optional parameter - initialized to default value
     private double threshold = 0.2;
 
     /** @param collectionName collection to compact */

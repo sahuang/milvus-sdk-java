@@ -540,9 +540,8 @@ public class MilvusGrpcClient implements MilvusClient {
 
     List<FieldValue> fieldValueList = new ArrayList<>();
     List<? extends Map<String, Object>> fields = insertParam.getFields();
-    for (int i = 0; i < fields.size(); i++) {
+    for (Map<String, Object> map : fields) {
       // process each field
-      Map<String, Object> map = fields.get(i);
       if (!map.containsKey("field") || !map.containsKey("type") ||
           !map.containsKey("values")) {
         logError("insertParam fields map must contain 'field', 'type' and 'values' keys.");
@@ -552,44 +551,50 @@ public class MilvusGrpcClient implements MilvusClient {
       DataType dataType = (DataType) map.get("type");
       AttrRecord.Builder attrBuilder = AttrRecord.newBuilder();
       VectorRecord.Builder vectorBuilder = VectorRecord.newBuilder();
-      if (dataType == DataType.INT32) {
-        attrBuilder.addAllInt32Value((List<Integer>) map.get("values"));
-      } else if (dataType == DataType.INT64) {
-        attrBuilder.addAllInt64Value((List<Long>) map.get("values"));
-      } else if (dataType == DataType.FLOAT) {
-        attrBuilder.addAllFloatValue((List<Float>) map.get("values"));
-      } else if (dataType == DataType.DOUBLE) {
-        attrBuilder.addAllDoubleValue((List<Double>) map.get("values"));
-      } else if (dataType == DataType.VECTOR_FLOAT) {
-        List<List<Float>> floatVectors = (List<List<Float>>) map.get("values");
-        List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-        for (int j = 0; j < floatVectors.size(); j++) {
-          vectorRowRecordList.add(
-              VectorRowRecord.newBuilder()
-                  .addAllFloatData(floatVectors.get(j))
-                  .build());
+      try {
+        if (dataType == DataType.INT32) {
+          attrBuilder.addAllInt32Value((List<Integer>) map.get("values"));
+        } else if (dataType == DataType.INT64) {
+          attrBuilder.addAllInt64Value((List<Long>) map.get("values"));
+        } else if (dataType == DataType.FLOAT) {
+          attrBuilder.addAllFloatValue((List<Float>) map.get("values"));
+        } else if (dataType == DataType.DOUBLE) {
+          attrBuilder.addAllDoubleValue((List<Double>) map.get("values"));
+        } else if (dataType == DataType.VECTOR_FLOAT) {
+          List<List<Float>> floatVectors = (List<List<Float>>) map.get("values");
+          List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
+          for (List<Float> floatVector : floatVectors) {
+            vectorRowRecordList.add(
+                VectorRowRecord.newBuilder()
+                    .addAllFloatData(floatVector)
+                    .build());
+          }
+          vectorBuilder.addAllRecords(vectorRowRecordList);
+        } else if (dataType == DataType.VECTOR_BINARY) {
+          List<ByteBuffer> binaryList = (List<ByteBuffer>) map.get("values");
+          List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
+          for (ByteBuffer byteBuffer : binaryList) {
+            ((Buffer) byteBuffer).rewind();
+            vectorRowRecordList.add(
+                VectorRowRecord.newBuilder()
+                    .setBinaryData(ByteString.copyFrom(byteBuffer))
+                    .build());
+          }
+          vectorBuilder.addAllRecords(vectorRowRecordList);
+        } else {
+          logError("insertParam `values` DataType unsupported.");
+          return new InsertResponse(
+              new Response(Response.Status.ILLEGAL_ARGUMENT), Collections.emptyList());
         }
-        vectorBuilder.addAllRecords(vectorRowRecordList);
-      } else if (dataType == DataType.VECTOR_BINARY) {
-        List<ByteBuffer> binaryList = (List<ByteBuffer>) map.get("values");
-        List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-        for (int j = 0; j < binaryList.size(); j++) {
-          ((Buffer) binaryList.get(j)).rewind();
-          vectorRowRecordList.add(
-              VectorRowRecord.newBuilder()
-                  .setBinaryData(ByteString.copyFrom(binaryList.get(j)))
-                  .build());
-        }
-        vectorBuilder.addAllRecords(vectorRowRecordList);
-      } else {
-        logError("insertParam values type unsupported.");
+      } catch (Exception e) {
+        logError("insertParam `values` invalid.");
         return new InsertResponse(
             new Response(Response.Status.ILLEGAL_ARGUMENT), Collections.emptyList());
       }
 
       AttrRecord attrRecord = attrBuilder.build();
       VectorRecord vectorRecord = vectorBuilder.build();
-      
+
       FieldValue fieldValue =
           FieldValue.newBuilder()
               .setFieldName(map.get("field").toString())
@@ -647,9 +652,8 @@ public class MilvusGrpcClient implements MilvusClient {
 
     List<FieldValue> fieldValueList = new ArrayList<>();
     List<? extends Map<String, Object>> fields = insertParam.getFields();
-    for (int i = 0; i < fields.size(); i++) {
+    for (Map<String, Object> map : fields) {
       // process each field
-      Map<String, Object> map = fields.get(i);
       if (!map.containsKey("field") || !map.containsKey("type") ||
           !map.containsKey("values")) {
         logError("insertParam fields map must contain 'field', 'type' and 'values' keys.");
@@ -657,41 +661,47 @@ public class MilvusGrpcClient implements MilvusClient {
             new InsertResponse(
                 new Response(Response.Status.ILLEGAL_ARGUMENT), Collections.emptyList()));
       }
-      String fieldName = map.get("field").toString();
       DataType dataType = (DataType) map.get("type");
       AttrRecord.Builder attrBuilder = AttrRecord.newBuilder();
       VectorRecord.Builder vectorBuilder = VectorRecord.newBuilder();
-      if (dataType == DataType.INT32) {
-        attrBuilder.addAllInt32Value((List<Integer>) map.get("values"));
-      } else if (dataType == DataType.INT64) {
-        attrBuilder.addAllInt64Value((List<Long>) map.get("values"));
-      } else if (dataType == DataType.FLOAT) {
-        attrBuilder.addAllFloatValue((List<Float>) map.get("values"));
-      } else if (dataType == DataType.DOUBLE) {
-        attrBuilder.addAllDoubleValue((List<Double>) map.get("values"));
-      } else if (dataType == DataType.VECTOR_FLOAT) {
-        List<List<Float>> floatVectors = (List<List<Float>>) map.get("values");
-        List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-        for (int j = 0; j < floatVectors.size(); j++) {
-          vectorRowRecordList.add(
-              VectorRowRecord.newBuilder()
-                  .addAllFloatData(floatVectors.get(j))
-                  .build());
+      try {
+        if (dataType == DataType.INT32) {
+          attrBuilder.addAllInt32Value((List<Integer>) map.get("values"));
+        } else if (dataType == DataType.INT64) {
+          attrBuilder.addAllInt64Value((List<Long>) map.get("values"));
+        } else if (dataType == DataType.FLOAT) {
+          attrBuilder.addAllFloatValue((List<Float>) map.get("values"));
+        } else if (dataType == DataType.DOUBLE) {
+          attrBuilder.addAllDoubleValue((List<Double>) map.get("values"));
+        } else if (dataType == DataType.VECTOR_FLOAT) {
+          List<List<Float>> floatVectors = (List<List<Float>>) map.get("values");
+          List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
+          for (List<Float> floatVector : floatVectors) {
+            vectorRowRecordList.add(
+                VectorRowRecord.newBuilder()
+                    .addAllFloatData(floatVector)
+                    .build());
+          }
+          vectorBuilder.addAllRecords(vectorRowRecordList);
+        } else if (dataType == DataType.VECTOR_BINARY) {
+          List<ByteBuffer> binaryList = (List<ByteBuffer>) map.get("values");
+          List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
+          for (ByteBuffer byteBuffer : binaryList) {
+            ((Buffer) byteBuffer).rewind();
+            vectorRowRecordList.add(
+                VectorRowRecord.newBuilder()
+                    .setBinaryData(ByteString.copyFrom(byteBuffer))
+                    .build());
+          }
+          vectorBuilder.addAllRecords(vectorRowRecordList);
+        } else {
+          logError("insertParam `values` DataType unsupported.");
+          return Futures.immediateFuture(
+              new InsertResponse(
+                  new Response(Response.Status.ILLEGAL_ARGUMENT), Collections.emptyList()));
         }
-        vectorBuilder.addAllRecords(vectorRowRecordList);
-      } else if (dataType == DataType.VECTOR_BINARY) {
-        List<ByteBuffer> binaryList = (List<ByteBuffer>) map.get("values");
-        List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-        for (int j = 0; j < binaryList.size(); j++) {
-          ((Buffer) binaryList.get(j)).rewind();
-          vectorRowRecordList.add(
-              VectorRowRecord.newBuilder()
-                  .setBinaryData(ByteString.copyFrom(binaryList.get(j)))
-                  .build());
-        }
-        vectorBuilder.addAllRecords(vectorRowRecordList);
-      } else {
-        logError("insertParam values type unsupported.");
+      } catch (Exception e) {
+        logError("insertParam `values` invalid.");
         return Futures.immediateFuture(
             new InsertResponse(
                 new Response(Response.Status.ILLEGAL_ARGUMENT), Collections.emptyList()));
@@ -778,18 +788,14 @@ public class MilvusGrpcClient implements MilvusClient {
     int currKey = 0;
     JSONObject json1;
     try {
-      System.out.println(searchParam.getDSL());
       json1 = new JSONObject(searchParam.getDSL());
-      System.out.println("json1 = " + json1.toString());
       Iterator<String> keys1 = json1.keys();
       while (keys1.hasNext()) {
         String key1 = keys1.next(); // "bool"
-        System.out.println("key1 = " + key1.toString());
         JSONObject json2 = (JSONObject) json1.get(key1);
         Iterator<String> keys2 = json2.keys();
         while (keys2.hasNext()) {
           String key2 = keys2.next(); // "must"
-          System.out.println("key2 = " + key2.toString());
           JSONArray json3 = (JSONArray) json2.get(key2);
           // loop over array of "term", "range" and "vector"
           for (int i = 0; i < json3.length(); i++) {
@@ -797,10 +803,8 @@ public class MilvusGrpcClient implements MilvusClient {
             Iterator<String> keys4 = json4.keys();
             while (keys4.hasNext()) {
               String key4 = keys4.next(); // term/range/vector
-              System.out.println("key4 = " + key4.toString());
               if (!key4.equals("vector")) continue;
               JSONObject json5 = (JSONObject) json4.get(key4);
-              System.out.println("json5 = " + json5.toString());
               // replace JSONObject by a placeholder string
               vecMap.put(Integer.toString(currKey), new JSONObject(json5.toString()));
               Iterator<String> keys5 = json5.keys();
@@ -818,13 +822,10 @@ public class MilvusGrpcClient implements MilvusClient {
       return searchResponse;
     }
 
-    System.out.println("DSL = " + json1.toString());
-
     // use placeholder and vectors to create VectorParam list
     for (Map.Entry<String, JSONObject> entry : vecMap.entrySet()) {
       String key = entry.getKey();
       JSONObject value = (JSONObject) entry.getValue().get(nameMap.get(key));
-      System.out.println("entryset = " + value.toString());
       if (!value.has("topk") || !value.has("query") || !value.has("type")) {
         logError("Invalid DSL vector field argument. Refer to examples for more information.");
         SearchResponse searchResponse = new SearchResponse();
@@ -881,7 +882,6 @@ public class MilvusGrpcClient implements MilvusClient {
       value.remove("type");
       value.remove("query");
       jsonObject.put(key, entry.getValue());
-      System.out.println("json string = " + jsonObject.toString());
       VectorParam vectorParam =
           VectorParam.newBuilder()
               .setJson(jsonObject.toString())
@@ -948,20 +948,17 @@ public class MilvusGrpcClient implements MilvusClient {
     List<VectorParam> vectorParamList = new ArrayList<>();
     Map<String, JSONObject> vecMap = new HashMap<>();
     Map<String, String> nameMap = new HashMap<>();
-    Integer currKey = 0;
+    int currKey = 0;
     JSONObject json1;
     try {
       json1 = new JSONObject(searchParam.getDSL());
-      System.out.println("json1 = " + json1.toString());
       Iterator<String> keys1 = json1.keys();
       while (keys1.hasNext()) {
         String key1 = keys1.next(); // "bool"
-        System.out.println("key1 = " + key1.toString());
         JSONObject json2 = (JSONObject) json1.get(key1);
         Iterator<String> keys2 = json2.keys();
         while (keys2.hasNext()) {
           String key2 = keys2.next(); // "must"
-          System.out.println("key2 = " + key2.toString());
           JSONArray json3 = (JSONArray) json2.get(key2);
           // loop over array of "term", "range" and "vector"
           for (int i = 0; i < json3.length(); i++) {
@@ -969,15 +966,13 @@ public class MilvusGrpcClient implements MilvusClient {
             Iterator<String> keys4 = json4.keys();
             while (keys4.hasNext()) {
               String key4 = keys4.next(); // term/range/vector
-              System.out.println("key4 = " + key4.toString());
               if (!key4.equals("vector")) continue;
               JSONObject json5 = (JSONObject) json4.get(key4);
-              System.out.println("json5 = " + json5.toString());
               // replace JSONObject by a placeholder string
-              vecMap.put(currKey.toString(), new JSONObject(json5.toString()));
+              vecMap.put(Integer.toString(currKey), new JSONObject(json5.toString()));
               Iterator<String> keys5 = json5.keys();
-              nameMap.put(currKey.toString(), keys5.next());
-              json4.put(key4, currKey.toString());
+              nameMap.put(Integer.toString(currKey), keys5.next());
+              json4.put(key4, Integer.toString(currKey));
               currKey++;
             }
           }
@@ -990,13 +985,10 @@ public class MilvusGrpcClient implements MilvusClient {
       return Futures.immediateFuture(searchResponse);
     }
 
-    System.out.println("DSL = " + json1.toString());
-
     // use placeholder and vectors to create VectorParam list
     for (Map.Entry<String, JSONObject> entry : vecMap.entrySet()) {
       String key = entry.getKey();
       JSONObject value = (JSONObject) entry.getValue().get(nameMap.get(key));
-      System.out.println("entryset = " + value.toString());
       if (!value.has("topk") || !value.has("query") || !value.has("type")) {
         logError("Invalid DSL vector field argument. Refer to examples for more information.");
         SearchResponse searchResponse = new SearchResponse();
@@ -1053,7 +1045,6 @@ public class MilvusGrpcClient implements MilvusClient {
       value.remove("type");
       value.remove("query");
       jsonObject.put(key, entry.getValue());
-      System.out.println("json string = " + jsonObject.toString());
       VectorParam vectorParam =
           VectorParam.newBuilder()
               .setJson(jsonObject.toString())
@@ -1412,23 +1403,25 @@ public class MilvusGrpcClient implements MilvusClient {
           }
         }
         List<FieldValue> fieldValueList = response.getFieldsList();
-        for (int i = 0; i < fieldValueList.size(); i++) {
-          FieldValue fieldValue = fieldValueList.get(i);
+        for (FieldValue fieldValue : fieldValueList) {
           String fieldName = fieldValue.getFieldName();
           for (int j = 0; j < validIds.size(); j++) {
             if (fieldValue.getAttrRecord().getInt32ValueCount() > 0) {
-              fieldsMap.get(j).put(fieldName, fieldValue.getAttrRecord().getInt32ValueList().get(j));
+              fieldsMap.get(j)
+                  .put(fieldName, fieldValue.getAttrRecord().getInt32ValueList().get(j));
             } else if (fieldValue.getAttrRecord().getInt64ValueCount() > 0) {
-              fieldsMap.get(j).put(fieldName, fieldValue.getAttrRecord().getInt64ValueList().get(j));
+              fieldsMap.get(j)
+                  .put(fieldName, fieldValue.getAttrRecord().getInt64ValueList().get(j));
             } else if (fieldValue.getAttrRecord().getDoubleValueCount() > 0) {
-              fieldsMap.get(j).put(fieldName, fieldValue.getAttrRecord().getDoubleValueList().get(j));
+              fieldsMap.get(j)
+                  .put(fieldName, fieldValue.getAttrRecord().getDoubleValueList().get(j));
             } else if (fieldValue.getAttrRecord().getFloatValueCount() > 0) {
-              fieldsMap.get(j).put(fieldName, fieldValue.getAttrRecord().getFloatValueList().get(j));
+              fieldsMap.get(j)
+                  .put(fieldName, fieldValue.getAttrRecord().getFloatValueList().get(j));
             } else {
               // the object is vector
               List<VectorRowRecord> vectorRowRecordList =
                   fieldValue.getVectorRecord().getRecordsList();
-              assert vectorRowRecordList.size() == validIds.size();
               if (vectorRowRecordList.get(j).getFloatDataCount() > 0) {
                 fieldsMap.get(j).put(fieldName, vectorRowRecordList.get(j).getFloatDataList());
               } else {
@@ -1752,8 +1745,7 @@ public class MilvusGrpcClient implements MilvusClient {
     }
     if (entities.getValidRowCount() != 0) {
       List<FieldValue> fieldValueList = entities.getFieldsList();
-      for (int i = 0; i < fieldValueList.size(); i++) {
-        FieldValue fieldValue = fieldValueList.get(i);
+      for (FieldValue fieldValue : fieldValueList) {
         String fieldName = fieldValue.getFieldName();
         for (int j = 0; j < resultIdsList.size(); j++) {
           if (fieldValue.getAttrRecord().getInt32ValueCount() > 0) {
@@ -1768,7 +1760,6 @@ public class MilvusGrpcClient implements MilvusClient {
             // the object is vector
             List<VectorRowRecord> vectorRowRecordList =
                 fieldValue.getVectorRecord().getRecordsList();
-            assert vectorRowRecordList.size() == resultIdsList.size();
             if (vectorRowRecordList.get(j).getFloatDataCount() > 0) {
               fieldsMap.get(j).put(fieldName, vectorRowRecordList.get(j).getFloatDataList());
             } else {

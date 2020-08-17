@@ -21,8 +21,8 @@ package io.milvus.client;
 
 import javax.annotation.Nonnull;
 
-/** Represents an index containing <code>fieldName</code> and <code>paramsInJson</code>
- * which contains index_type, params etc.
+/** Represents an index containing <code>fieldName</code>, <code>indexName</code> and
+ * <code>paramsInJson</code>, which contains index_type, params etc.
  */
 public class Index {
   private final String collectionName;
@@ -76,9 +76,9 @@ public class Index {
     private String indexName = "";
 
     /**
-     * @param collectionName collection to create index on
+     * @param collectionName collection to create index for
      * @param fieldName name of the field on which index is built. If set to empty string
-     *                  in dropIndex, all index of the collection will be dropped.
+     *                  in <code>dropIndex</code>, all index of the collection will be dropped.
      */
     public Builder(@Nonnull String collectionName, @Nonnull String fieldName) {
       this.collectionName = collectionName;
@@ -86,22 +86,25 @@ public class Index {
     }
 
     /**
-     * Optional. Default to <code>FLAT</code> with nlist: 16384. Index parameters are different for different
+     * Optional. The parameters for building an index. Index parameters are different for different
      * index types. Refer to <a
      * href="https://milvus.io/docs/v0.10.1/create_drop_index_python.md">https://milvus.io/docs/v0.10.1/create_drop_index_python.md</a>
      * for more information.
      *
      * Example index parameters in json format
      *    for vector field:
-     *        extra_params["index_type"] = one of the values: IDMAP, IVFLAT, IVFSQ8, NSGMIX, IVFSQ8H,
-     *                                                        PQ, HNSW, HNSW_SQ8NM, ANNOY
+     *        extra_params["index_type"] = one of the values: FLAT, IVF_FLAT, IVF_SQ8, NSG,
+     *                                                        IVF_SQ8_HYBRID, IVF_PQ, HNSW,
+     *                                                        RHNSW_FLAT, RHNSW_PQ, RHNSW_SQ, ANNOY
      *        extra_params["metric_type"] = one of the values: L2, IP, HAMMING, JACCARD, TANIMOTO
      *                                                         SUBSTRUCTURE, SUPERSTRUCTURE
-     *        extra_params["params"] = extra parameters for index, for example ivflat: {nlist: 2048}
-     *    for structured field:
-     *        extra_params["index_type"] = one of the values: SORTED
+     *        extra_params["params"] = optional parameters for index, including <code>nlist</code>
      *
-     * Example param: <code>{\"index_type\": "IVFLAT", \"params\": {\"nlist\": 2048}}</code>
+     * Example param: <code>
+     *   {\"index_type\": "IVF_FLAT",
+     *   \"metric_type\": "IP",
+     *   \"params\": {\"nlist\": 2048}}
+     * </code>
      *
      * @param paramsInJson extra parameters in JSON format
      * @return <code>Builder</code>

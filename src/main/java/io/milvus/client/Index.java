@@ -101,6 +101,7 @@ public class Index {
      * </pre>
      *
      * @param paramsInJson extra parameters in JSON format
+     * @see JsonBuilder
      * @return <code>Builder</code>
      */
     public Builder withParamsInJson(@Nonnull String paramsInJson) {

@@ -58,7 +58,7 @@ public class InsertParam {
     private final String collectionName;
 
     // Optional parameters - initialized to default values
-    private List<? extends Map<String, Object>> fields = new ArrayList<>();
+    private List<Map<String, Object>> fields = new ArrayList<>();
     private List<Long> entityIds = new ArrayList<>();
     private String partitionTag = "";
 
@@ -80,15 +80,36 @@ public class InsertParam {
      *         {"field": "A", "values": A_list, "type": DataType.INT32},
      *         {"field": "B", "values": B_list, "type": DataType.INT32},
      *         {"field": "C", "values": C_list, "type": DataType.INT64},
-     *         {"field": "Vec", "values": vecs, "type": DataType.FLOAT_VECTOR}
+     *         {"field": "Vec", "values": vecs, "type": DataType.VECTOR_FLOAT}
      *   ]
      *     </code>
      * </pre>
      *
      * @return <code>Builder</code>
      */
-    public Builder withFields(@Nonnull List<? extends Map<String, Object>> fields) {
+    public Builder withFields(@Nonnull List<Map<String, Object>> fields) {
       this.fields = fields;
+      return this;
+    }
+
+    /**
+     * Add a single field to collection. Example field:
+     * <pre>
+     *   <code>
+     *      {"field": "A", "values": A_list, "type": DataType.INT64}, or
+     *      {"field": "B", "values": B_list, "type": DataType.INT32}, or
+     *      {"field": "C", "values": C_list, "type": DataType.FLOAT}, or
+     *      {"field": "Vec", "values": vecs, "type": DataType.VECTOR_FLOAT}
+     *   </code>
+     * </pre>
+     *
+     * @param field A field must have keys "field", "values" and "type".
+     *              <code>FieldBuilder</code> can be used to create a field.
+     * @see FieldBuilder
+     * @return <code>Builder</code>
+     */
+    public Builder field(@Nonnull Map<String, Object> field) {
+      this.fields.add(field);
       return this;
     }
 

@@ -19,10 +19,14 @@
 
 package io.milvus.client;
 
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import io.milvus.client.InsertParam.Builder;
 import io.milvus.client.Response.Status;
 import org.apache.commons.text.RandomStringGenerator;
+import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.json.*;
 
 import java.nio.ByteBuffer;
@@ -81,62 +85,6 @@ class MilvusClientTest {
     return vector;
   }
 
-  // Helper function that generates default fields list for a collection
-  static List<Map<String, Object>> generateDefaultFields(int dimension) {
-    List<Map<String, Object>> fieldList = new ArrayList<>();
-    Map<String, Object> intField = new HashMap<>();
-    intField.put("field", "int64");
-    intField.put("type", DataType.INT64);
-
-    Map<String, Object> floatField = new HashMap<>();
-    floatField.put("field", "float");
-    floatField.put("type", DataType.FLOAT);
-
-    Map<String, Object> vecField = new HashMap<>();
-    vecField.put("field", "float_vec");
-    vecField.put("type", DataType.VECTOR_FLOAT);
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put("dim", dimension);
-    vecField.put("params", jsonObject.toString());
-
-    fieldList.add(intField);
-    fieldList.add(floatField);
-    fieldList.add(vecField);
-    return fieldList;
-  }
-
-  // Helper function that generates entity field values for inserting into a collection
-  static List<Map<String, Object>> generateDefaultFieldValues(int vectorCount, int dimension) {
-    List<Map<String, Object>> fieldList = new ArrayList<>();
-    Map<String, Object> intField = new HashMap<>();
-    intField.put("field", "int64");
-    intField.put("type", DataType.INT64);
-
-    Map<String, Object> floatField = new HashMap<>();
-    floatField.put("field", "float");
-    floatField.put("type", DataType.FLOAT);
-
-    Map<String, Object> vecField = new HashMap<>();
-    vecField.put("field", "float_vec");
-    vecField.put("type", DataType.VECTOR_FLOAT);
-
-    List<Long> intValues = new ArrayList<>(vectorCount);
-    List<Float> floatValues = new ArrayList<>(vectorCount);
-    List<List<Float>> vectors = generateFloatVectors(vectorCount, dimension);
-    for (int i = 0; i < vectorCount; i++) {
-      intValues.add((long) i);
-      floatValues.add((float) i);
-    }
-    intField.put("values", intValues);
-    floatField.put("values", floatValues);
-    vecField.put("values", vectors);
-
-    fieldList.add(intField);
-    fieldList.add(floatField);
-    fieldList.add(vecField);
-    return fieldList;
-  }
-
   // Helper function that generate a simple DSL statement with vector filtering only
   static String generateSimpleDSL(Long topK, String query) {
     return String.format(
@@ -192,8 +140,14 @@ class MilvusClientTest {
     dimension = 128;
     CollectionMapping collectionMapping =
         new CollectionMapping.Builder(randomCollectionName)
-            .withFields(generateDefaultFields(dimension))
-            .withParamsInJson("{\"segment_row_count\": 50000, \"auto_id\": false}")
+            .field(new FieldBuilder("int64", DataType.INT64).build())
+            .field(new FieldBuilder("float", DataType.FLOAT).build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .param("dim", dimension)
+                .build())
+            .withParamsInJson(new JsonBuilder().param("segment_row_count", 50000)
+                                               .param("auto_id", false)
+                                               .build())
             .build();
 
     assertTrue(client.createCollection(collectionMapping).ok());
@@ -263,20 +217,19 @@ class MilvusClientTest {
   void createInvalidCollection() {
     // invalid collection name
     String invalidCollectionName = "╯°□°）╯";
-    List<Map<String, Object>> defaultField = generateDefaultFields(dimension);
     CollectionMapping invalidCollectionMapping =
         new CollectionMapping.Builder(invalidCollectionName)
-            .withFields(defaultField)
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .param("dim", dimension)
+                .build())
             .build();
     Response createCollectionResponse = client.createCollection(invalidCollectionMapping);
     assertFalse(createCollectionResponse.ok());
     assertEquals(Response.Status.ILLEGAL_COLLECTION_NAME, createCollectionResponse.getStatus());
 
     // invalid field
-    defaultField.get(0).remove("type");
     invalidCollectionMapping =
         new CollectionMapping.Builder("validCollectionName")
-            .withFields(defaultField)
             .build();
     createCollectionResponse = client.createCollection(invalidCollectionMapping);
     assertFalse(createCollectionResponse.ok());
@@ -284,8 +237,12 @@ class MilvusClientTest {
     // invalid segment_row_count
     invalidCollectionMapping =
         new CollectionMapping.Builder("validCollectionName")
-            .withFields(generateDefaultFields(dimension))
-            .withParamsInJson("{\"segment_row_count\": -1000}")
+            .field(new FieldBuilder("int64", DataType.INT64).build())
+            .field(new FieldBuilder("float", DataType.FLOAT).build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .param("dim", dimension)
+                .build())
+            .withParamsInJson(new JsonBuilder().param("segment_row_count", -1000).build())
             .build();
     createCollectionResponse = client.createCollection(invalidCollectionMapping);
     assertFalse(createCollectionResponse.ok());
@@ -322,21 +279,42 @@ class MilvusClientTest {
     assertTrue(listPartitionsResponse.ok());
     assertEquals(3, listPartitionsResponse.getPartitionList().size()); // two tags plus _default
 
-    List<Map<String, Object>> defaultFieldValues1 = generateDefaultFieldValues(size, dimension);
+    List<Long> intValues = new ArrayList<>(size);
+    List<Float> floatValues = new ArrayList<>(size);
+    List<List<Float>> vectors = generateFloatVectors(size, dimension);
+    for (int i = 0; i < size; i++) {
+      intValues.add((long) i);
+      floatValues.add((float) i);
+    }
     List<Long> entityIds1 = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(defaultFieldValues1)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(entityIds1)
             .withPartitionTag(tag1)
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
     assertTrue(insertResponse.ok());
-    List<Map<String, Object>> defaultFieldValues2 = generateDefaultFieldValues(size, dimension);
     List<Long> entityIds2 = LongStream.range(size, size * 2).boxed().collect(Collectors.toList());
     insertParam =
         new Builder(randomCollectionName)
-            .withFields(defaultFieldValues2)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(entityIds2)
             .withPartitionTag(tag2)
             .build();
@@ -351,9 +329,7 @@ class MilvusClientTest {
     final int searchSize = 1;
     final long topK = 10;
 
-    assertTrue(defaultFieldValues1.get(2).get("values") instanceof List);
-    List<List<Float>> vectors1 = (List<List<Float>>) defaultFieldValues1.get(2).get("values");
-    List<List<Float>> vectorsToSearch1 = vectors1.subList(0, searchSize);
+    List<List<Float>> vectorsToSearch1 = vectors.subList(0, searchSize);
     List<String> partitionTags1 = new ArrayList<>();
     partitionTags1.add(tag1);
     SearchParam searchParam1 =
@@ -367,8 +343,7 @@ class MilvusClientTest {
     assertEquals(searchSize, resultIdsList1.size());
     assertTrue(entityIds1.containsAll(resultIdsList1.get(0)));
 
-    List<List<Float>> vectors2 = (List<List<Float>>) defaultFieldValues2.get(2).get("values");
-    List<List<Float>> vectorsToSearch2 = vectors2.subList(0, searchSize);
+    List<List<Float>> vectorsToSearch2 = vectors.subList(0, searchSize);
     List<String> partitionTags2 = new ArrayList<>();
     partitionTags2.add(tag2);
     SearchParam searchParam2 =
@@ -404,8 +379,10 @@ class MilvusClientTest {
 
     Index index =
         new Index.Builder(randomCollectionName, "float_vec")
-            .withParamsInJson("{\"index_type\": \"IVF_SQ8\", \"metric_type\": \"L2\", "
-                + "\"params\": {\"nlist\": 2048}}")
+            .withParamsInJson(new JsonBuilder().param("index_type", "IVF_SQ8")
+                                               .param("metric_type", "L2")
+                                               .indexParam("nlist", 2048)
+                                               .build())
             .build();
 
     Response createIndexResponse = client.createIndex(index);
@@ -423,22 +400,51 @@ class MilvusClientTest {
 
     Index index =
         new Index.Builder(randomCollectionName, "float_vec")
-            .withParamsInJson("{\"index_type\": \"IVF_SQ8\", \"metric_type\": \"L2\", "
-                + "\"params\": {\"nlist\": 2048}}")
+            .withParamsInJson(new JsonBuilder().param("index_type", "IVF_SQ8")
+                                               .param("metric_type", "L2")
+                                               .indexParam("nlist", 2048)
+                                               .build())
             .build();
 
     ListenableFuture<Response> createIndexResponseFuture = client.createIndexAsync(index);
-    Response createIndexResponse = createIndexResponseFuture.get();
-    assertTrue(createIndexResponse.ok());
+    Futures.addCallback(
+        createIndexResponseFuture,
+        new FutureCallback<Response>() {
+          @Override
+          public void onSuccess(@NullableDecl Response createIndexResponse) {
+            assert createIndexResponse != null;
+            assertTrue(createIndexResponse.ok());
+          }
+
+          @Override
+          public void onFailure(Throwable t) {
+            System.out.println(t.getMessage());
+          }
+        }, MoreExecutors.directExecutor()
+    );
   }
 
   @org.junit.jupiter.api.Test
   void insert() {
-    List<Map<String, Object>> defaultFieldValues = generateDefaultFieldValues(size, dimension);
+    List<Long> intValues = new ArrayList<>(size);
+    List<Float> floatValues = new ArrayList<>(size);
+    List<List<Float>> vectors = generateFloatVectors(size, dimension);
+    for (int i = 0; i < size; i++) {
+      intValues.add((long) i);
+      floatValues.add((float) i);
+    }
     List<Long> entityIds = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(defaultFieldValues)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(entityIds)
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
@@ -448,17 +454,44 @@ class MilvusClientTest {
 
   @org.junit.jupiter.api.Test
   void insertAsync() throws ExecutionException, InterruptedException {
-    List<Map<String, Object>> defaultFieldValues = generateDefaultFieldValues(size, dimension);
+    List<Long> intValues = new ArrayList<>(size);
+    List<Float> floatValues = new ArrayList<>(size);
+    List<List<Float>> vectors = generateFloatVectors(size, dimension);
+    for (int i = 0; i < size; i++) {
+      intValues.add((long) i);
+      floatValues.add((float) i);
+    }
     List<Long> entityIds = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(defaultFieldValues)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(entityIds)
             .build();
     ListenableFuture<InsertResponse> insertResponseFuture = client.insertAsync(insertParam);
-    InsertResponse insertResponse = insertResponseFuture.get();
-    assertTrue(insertResponse.ok());
-    assertEquals(size, insertResponse.getEntityIds().size());
+    Futures.addCallback(
+        insertResponseFuture,
+        new FutureCallback<InsertResponse>() {
+          @Override
+          public void onSuccess(@NullableDecl InsertResponse insertResponse) {
+            assert insertResponse != null;
+            assertTrue(insertResponse.ok());
+            assertEquals(size, insertResponse.getEntityIds().size());
+          }
+
+          @Override
+          public void onFailure(Throwable t) {
+            System.out.println(t.getMessage());
+          }
+        }, MoreExecutors.directExecutor()
+    );
   }
 
   @org.junit.jupiter.api.Test
@@ -466,31 +499,20 @@ class MilvusClientTest {
     final int binaryDimension = 10000;
 
     String binaryCollectionName = generator.generate(10);
-    List<Map<String, Object>> fieldList = new ArrayList<>();
-    Map<String, Object> binaryField = new HashMap<>();
-    binaryField.put("field", "binary_vec");
-    binaryField.put("type", DataType.VECTOR_BINARY);
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put("dim", binaryDimension);
-    binaryField.put("params", jsonObject.toString());
-    fieldList.add(binaryField);
     CollectionMapping collectionMapping =
         new CollectionMapping.Builder(binaryCollectionName)
-            .withFields(fieldList)
+            .field(new FieldBuilder("binary_vec", DataType.VECTOR_BINARY)
+                .param("dim", binaryDimension)
+                .build())
             .build();
     assertTrue(client.createCollection(collectionMapping).ok());
 
-    List<Map<String, Object>> insertList = new ArrayList<>();
-    Map<String, Object> insertBinaryField = new HashMap<>();
-    insertBinaryField.put("field", "binary_vec");
-    insertBinaryField.put("type", DataType.VECTOR_BINARY);
     List<ByteBuffer> vectors = generateBinaryVectors(size, binaryDimension);
-    insertBinaryField.put("values", vectors);
-    insertList.add(insertBinaryField);
-
     InsertParam insertParam =
         new Builder(binaryCollectionName)
-            .withFields(insertList)
+            .field(new FieldBuilder("binary_vec", DataType.VECTOR_BINARY)
+                .values(vectors)
+                .build())
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
     assertTrue(insertResponse.ok());
@@ -501,38 +523,27 @@ class MilvusClientTest {
 
   @org.junit.jupiter.api.Test
   void search() {
-    List<Map<String, Object>> fieldList = new ArrayList<>();
-    Map<String, Object> intField = new HashMap<>();
-    intField.put("field", "int64");
-    intField.put("type", DataType.INT64);
-
-    Map<String, Object> floatField = new HashMap<>();
-    floatField.put("field", "float");
-    floatField.put("type", DataType.FLOAT);
-
-    Map<String, Object> vecField = new HashMap<>();
-    vecField.put("field", "float_vec");
-    vecField.put("type", DataType.VECTOR_FLOAT);
-
     List<Long> intValues = new ArrayList<>(size);
     List<Float> floatValues = new ArrayList<>(size);
     List<List<Float>> vectors = generateFloatVectors(size, dimension);
-    vectors = vectors.stream().map(MilvusClientTest::normalizeVector).collect(Collectors.toList());
     for (int i = 0; i < size; i++) {
       intValues.add((long) i);
       floatValues.add((float) i);
     }
-    intField.put("values", intValues);
-    floatField.put("values", floatValues);
-    vecField.put("values", vectors);
-    fieldList.add(intField);
-    fieldList.add(floatField);
-    fieldList.add(vecField);
+    vectors = vectors.stream().map(MilvusClientTest::normalizeVector).collect(Collectors.toList());
 
     List<Long> insertIds = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(fieldList)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(insertIds)
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
@@ -549,7 +560,8 @@ class MilvusClientTest {
     SearchParam searchParam =
         new SearchParam.Builder(randomCollectionName)
             .withDSL(generateComplexDSL(topK, vectorsToSearch.toString()))
-            .withParamsInJson("{\"fields\": [\"int64\", \"float_vec\"]}")
+            .withParamsInJson(new JsonBuilder().param("fields",
+                new ArrayList<>(Arrays.asList("int64", "float_vec"))).build())
             .build();
     SearchResponse searchResponse = client.search(searchParam);
     assertTrue(searchResponse.ok());
@@ -572,38 +584,27 @@ class MilvusClientTest {
 
   @org.junit.jupiter.api.Test
   void searchAsync() throws ExecutionException, InterruptedException {
-    List<Map<String, Object>> fieldList = new ArrayList<>();
-    Map<String, Object> intField = new HashMap<>();
-    intField.put("field", "int64");
-    intField.put("type", DataType.INT64);
-
-    Map<String, Object> floatField = new HashMap<>();
-    floatField.put("field", "float");
-    floatField.put("type", DataType.FLOAT);
-
-    Map<String, Object> vecField = new HashMap<>();
-    vecField.put("field", "float_vec");
-    vecField.put("type", DataType.VECTOR_FLOAT);
-
     List<Long> intValues = new ArrayList<>(size);
     List<Float> floatValues = new ArrayList<>(size);
     List<List<Float>> vectors = generateFloatVectors(size, dimension);
-    vectors = vectors.stream().map(MilvusClientTest::normalizeVector).collect(Collectors.toList());
     for (int i = 0; i < size; i++) {
       intValues.add((long) i);
       floatValues.add((float) i);
     }
-    intField.put("values", intValues);
-    floatField.put("values", floatValues);
-    vecField.put("values", vectors);
-    fieldList.add(intField);
-    fieldList.add(floatField);
-    fieldList.add(vecField);
+    vectors = vectors.stream().map(MilvusClientTest::normalizeVector).collect(Collectors.toList());
 
     List<Long> insertIds = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(fieldList)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(insertIds)
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
@@ -620,7 +621,8 @@ class MilvusClientTest {
     SearchParam searchParam =
         new SearchParam.Builder(randomCollectionName)
             .withDSL(generateComplexDSL(topK, vectorsToSearch.toString()))
-            .withParamsInJson("{\"fields\": [\"int64\", \"float\"]}")
+            .withParamsInJson(new JsonBuilder().param("fields",
+                new ArrayList<>(Arrays.asList("int64", "float"))).build())
             .build();
     ListenableFuture<SearchResponse> searchResponseFuture = client.searchAsync(searchParam);
     SearchResponse searchResponse = searchResponseFuture.get();
@@ -647,63 +649,36 @@ class MilvusClientTest {
     final int binaryDimension = 10000;
 
     String binaryCollectionName = generator.generate(10);
-    // field list for collection
-    List<Map<String, Object>> fieldList = new ArrayList<>();
-    Map<String, Object> intField = new HashMap<>();
-    intField.put("field", "int64");
-    intField.put("type", DataType.INT64);
-
-    Map<String, Object> floatField = new HashMap<>();
-    floatField.put("field", "float");
-    floatField.put("type", DataType.FLOAT);
-
-    Map<String, Object> binaryField = new HashMap<>();
-    binaryField.put("field", "binary_vec");
-    binaryField.put("type", DataType.VECTOR_BINARY);
-    JSONObject jsonObject = new JSONObject();
-    jsonObject.put("dim", binaryDimension);
-    binaryField.put("params", jsonObject.toString());
-
-    fieldList.add(intField);
-    fieldList.add(floatField);
-    fieldList.add(binaryField);
     CollectionMapping collectionMapping =
         new CollectionMapping.Builder(binaryCollectionName)
-            .withFields(fieldList)
+            .field(new FieldBuilder("int64", DataType.INT64).build())
+            .field(new FieldBuilder("float", DataType.FLOAT).build())
+            .field(new FieldBuilder("binary_vec", DataType.VECTOR_BINARY)
+                .param("dim", binaryDimension)
+                .build())
             .build();
     assertTrue(client.createCollection(collectionMapping).ok());
 
     // field list for insert
-    List<Map<String, Object>> insertList = new ArrayList<>();
-    Map<String, Object> intInsertField = new HashMap<>();
-    intInsertField.put("field", "int64");
-    intInsertField.put("type", DataType.INT64);
-
-    Map<String, Object> floatInsertField = new HashMap<>();
-    floatInsertField.put("field", "float");
-    floatInsertField.put("type", DataType.FLOAT);
-
-    Map<String, Object> vecInsertField = new HashMap<>();
-    vecInsertField.put("field", "binary_vec");
-    vecInsertField.put("type", DataType.VECTOR_BINARY);
-
     List<Long> intValues = new ArrayList<>(size);
     List<Float> floatValues = new ArrayList<>(size);
-    List<ByteBuffer> vectors = generateBinaryVectors(size, binaryDimension);
     for (int i = 0; i < size; i++) {
       intValues.add((long) i);
       floatValues.add((float) i);
     }
-    intInsertField.put("values", intValues);
-    floatInsertField.put("values", floatValues);
-    vecInsertField.put("values", vectors);
-    insertList.add(intInsertField);
-    insertList.add(floatInsertField);
-    insertList.add(vecInsertField);
+    List<ByteBuffer> vectors = generateBinaryVectors(size, binaryDimension);
 
     InsertParam insertParam =
         new Builder(binaryCollectionName)
-            .withFields(insertList)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("binary_vec", DataType.VECTOR_BINARY)
+                .values(vectors)
+                .build())
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
     assertTrue(insertResponse.ok());
@@ -722,7 +697,8 @@ class MilvusClientTest {
         new SearchParam.Builder(binaryCollectionName)
             .withDSL(generateComplexDSLBinary(topK, "myPlaceholder"))
             .withBinaryEntities(binaryEntities)
-            .withParamsInJson("{\"fields\": [\"int64\", \"float\"]}")
+            .withParamsInJson(new JsonBuilder().param("fields",
+                new ArrayList<>(Arrays.asList("int64", "float"))).build())
             .build();
     SearchResponse searchResponse = client.search(searchParam);
     assertTrue(searchResponse.ok());
@@ -832,19 +808,6 @@ class MilvusClientTest {
   @org.junit.jupiter.api.Test
   @SuppressWarnings("unchecked")
   void getEntityByID() {
-    List<Map<String, Object>> fieldList = new ArrayList<>();
-    Map<String, Object> intField = new HashMap<>();
-    intField.put("field", "int64");
-    intField.put("type", DataType.INT64);
-
-    Map<String, Object> floatField = new HashMap<>();
-    floatField.put("field", "float");
-    floatField.put("type", DataType.FLOAT);
-
-    Map<String, Object> vecField = new HashMap<>();
-    vecField.put("field", "float_vec");
-    vecField.put("type", DataType.VECTOR_FLOAT);
-
     List<Long> intValues = new ArrayList<>(size);
     List<Float> floatValues = new ArrayList<>(size);
     List<List<Float>> vectors = generateFloatVectors(size, dimension);
@@ -852,18 +815,20 @@ class MilvusClientTest {
       intValues.add((long) i);
       floatValues.add((float) i);
     }
-    intField.put("values", intValues);
-    floatField.put("values", floatValues);
-    vecField.put("values", vectors);
-
-    fieldList.add(intField);
-    fieldList.add(floatField);
-    fieldList.add(vecField);
+    vectors = vectors.stream().map(MilvusClientTest::normalizeVector).collect(Collectors.toList());
 
     List<Long> insertIds = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(fieldList)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(insertIds)
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
@@ -910,11 +875,27 @@ class MilvusClientTest {
 
   @org.junit.jupiter.api.Test
   void deleteEntityByID() {
-    List<Map<String, Object>> defaultFieldValues = generateDefaultFieldValues(size, dimension);
+    List<Long> intValues = new ArrayList<>(size);
+    List<Float> floatValues = new ArrayList<>(size);
+    List<List<Float>> vectors = generateFloatVectors(size, dimension);
+    for (int i = 0; i < size; i++) {
+      intValues.add((long) i);
+      floatValues.add((float) i);
+    }
+    vectors = vectors.stream().map(MilvusClientTest::normalizeVector).collect(Collectors.toList());
+
     List<Long> insertIds = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(defaultFieldValues)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(insertIds)
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
@@ -941,11 +922,27 @@ class MilvusClientTest {
 
   @org.junit.jupiter.api.Test
   void compact() {
-    List<Map<String, Object>> defaultFieldValues = generateDefaultFieldValues(size, dimension);
+    List<Long> intValues = new ArrayList<>(size);
+    List<Float> floatValues = new ArrayList<>(size);
+    List<List<Float>> vectors = generateFloatVectors(size, dimension);
+    for (int i = 0; i < size; i++) {
+      intValues.add((long) i);
+      floatValues.add((float) i);
+    }
+    vectors = vectors.stream().map(MilvusClientTest::normalizeVector).collect(Collectors.toList());
+
     List<Long> insertIds = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(defaultFieldValues)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(insertIds)
             .build();
     InsertResponse insertResponse = client.insert(insertParam);
@@ -990,11 +987,27 @@ class MilvusClientTest {
 
   @org.junit.jupiter.api.Test
   void compactAsync() throws ExecutionException, InterruptedException {
-    List<Map<String, Object>> defaultFieldValues = generateDefaultFieldValues(size, dimension);
+    List<Long> intValues = new ArrayList<>(size);
+    List<Float> floatValues = new ArrayList<>(size);
+    List<List<Float>> vectors = generateFloatVectors(size, dimension);
+    for (int i = 0; i < size; i++) {
+      intValues.add((long) i);
+      floatValues.add((float) i);
+    }
+    vectors = vectors.stream().map(MilvusClientTest::normalizeVector).collect(Collectors.toList());
+
     List<Long> insertIds = LongStream.range(0, size).boxed().collect(Collectors.toList());
     InsertParam insertParam =
         new Builder(randomCollectionName)
-            .withFields(defaultFieldValues)
+            .field(new FieldBuilder("int64", DataType.INT64)
+                .values(intValues)
+                .build())
+            .field(new FieldBuilder("float", DataType.FLOAT)
+                .values(floatValues)
+                .build())
+            .field(new FieldBuilder("float_vec", DataType.VECTOR_FLOAT)
+                .values(vectors)
+                .build())
             .withEntityIds(insertIds)
             .build();
     InsertResponse insertResponse = client.insert(insertParam);

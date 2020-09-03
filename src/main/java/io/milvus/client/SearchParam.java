@@ -124,7 +124,7 @@ public class SearchParam {
 
     /**
      * Optional. Default to empty map. Due to the nature of <code>ByteBuffer</code>, it is not
-     * feasible to pass binary entities as query vectors in DSL statement.
+     * feasible to pass binary entities as raw query vectors in DSL statement.
      * JSON strings cannot be parsed back to <code>List<ByteBuffer></code> object.
      * <p>The map will take user-defined name (placeholder) as the key, and list of query vectors
      * as the value. When building DSL statement, use the placeholder instead of raw entities

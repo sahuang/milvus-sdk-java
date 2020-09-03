@@ -785,112 +785,90 @@ public class MilvusGrpcClient implements MilvusClient {
 
     // convert DSL to json object and parse to extract vectors
     List<VectorParam> vectorParamList = new ArrayList<>();
-    Map<String, JSONObject> vecMap = new HashMap<>();
-    Map<String, String> nameMap = new HashMap<>();
-    int currKey = 0;
-    JSONObject json1;
+    JSONObject jsonObject;
+    List<Object> parsedDSL;
     try {
-      json1 = new JSONObject(searchParam.getDSL());
-      Iterator<String> keys1 = json1.keys();
-      while (keys1.hasNext()) {
-        String key1 = keys1.next(); // "bool"
-        JSONObject json2 = (JSONObject) json1.get(key1);
-        Iterator<String> keys2 = json2.keys();
-        while (keys2.hasNext()) {
-          String key2 = keys2.next(); // "must"
-          JSONArray json3 = (JSONArray) json2.get(key2);
-          // loop over array of "term", "range" and "vector"
-          for (int i = 0; i < json3.length(); i++) {
-            JSONObject json4 = json3.getJSONObject(i);
-            Iterator<String> keys4 = json4.keys();
-            while (keys4.hasNext()) {
-              String key4 = keys4.next(); // term/range/vector
-              if (!key4.equals("vector")) continue;
-              JSONObject json5 = (JSONObject) json4.get(key4);
-              // replace JSONObject by a placeholder string
-              vecMap.put(Integer.toString(currKey), new JSONObject(json5.toString()));
-              Iterator<String> keys5 = json5.keys();
-              nameMap.put(Integer.toString(currKey), keys5.next());
-              json4.put(key4, Integer.toString(currKey));
-              currKey++;
-            }
-          }
-        }
-      }
+      jsonObject = new JSONObject(searchParam.getDSL());
+      parsedDSL = parseDSL(jsonObject);
     } catch (JSONException err){
       logError("DSL must be in correct json format. Refer to examples for more information.");
       SearchResponse searchResponse = new SearchResponse();
       searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT, err.toString()));
       return searchResponse;
     }
+    if (parsedDSL.size() != 3) {
+      logError("DSL must include vector query. Refer to examples for more information.");
+      SearchResponse searchResponse = new SearchResponse();
+      searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+      return searchResponse;
+    }
 
     // use placeholder and vectors to create VectorParam list
-    for (Map.Entry<String, JSONObject> entry : vecMap.entrySet()) {
-      String key = entry.getKey();
-      JSONObject value = (JSONObject) entry.getValue().get(nameMap.get(key));
-      if (!value.has("topk") || !value.has("query") || !value.has("type")) {
-        logError("Invalid DSL vector field argument. Refer to examples for more information.");
-        SearchResponse searchResponse = new SearchResponse();
-        searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
-        return searchResponse;
-      }
-      List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-      if (value.get("type").toString().equals("float")) {
-        JSONArray arr = (JSONArray) value.get("query");
-        for (int i = 0; i < arr.length(); i++) {
-          JSONArray innerArr = (JSONArray) (arr.get(i));
-          List<Float> floatList = new ArrayList<>();
-          for (int j = 0; j < innerArr.length(); j++) {
-            Double num = (Double) innerArr.get(j);
-            floatList.add(num.floatValue());
-          }
-          VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-              .addAllFloatData(floatList)
-              .build();
-          vectorRowRecordList.add(rowRecord);
-        }
-      } else if (value.get("type").toString().equals("binary")) {
-        // get from placeholder map
-        Map<String, List<ByteBuffer>> binaryEntities = searchParam.getBinaryEntities();
-        String placeholder = value.get("query").toString();
-        if (!binaryEntities.containsKey(placeholder)) {
-          logError("Binary query vector placeholder `{}` not found in map"
-              + ". Refer to examples for more information.", placeholder);
-          SearchResponse searchResponse = new SearchResponse();
-          searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
-          return searchResponse;
-        }
-        List<ByteBuffer> query = binaryEntities.get(placeholder);
-        for (ByteBuffer byteBuffer : query) {
-          ((Buffer) byteBuffer).rewind();
-          VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-              .setBinaryData(ByteString.copyFrom(byteBuffer))
-              .build();
-          vectorRowRecordList.add(rowRecord);
-        }
-      } else {
-        logError("DSL vector type must be float or binary. Refer to examples for more information.");
-        SearchResponse searchResponse = new SearchResponse();
-        searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
-        return searchResponse;
-      }
-
-      VectorRecord vectorRecord =
-          VectorRecord.newBuilder()
-              .addAllRecords(vectorRowRecordList)
-              .build();
-
-      JSONObject jsonObject = new JSONObject();
-      value.remove("type");
-      value.remove("query");
-      jsonObject.put(key, entry.getValue());
-      VectorParam vectorParam =
-          VectorParam.newBuilder()
-              .setJson(jsonObject.toString())
-              .setRowRecord(vectorRecord)
-              .build();
-      vectorParamList.add(vectorParam);
+    String key = parsedDSL.get(2).toString();
+    JSONObject outer = (JSONObject) parsedDSL.get(1);
+    JSONObject value = (JSONObject) outer.get(key);
+    if (!value.has("topk") || !value.has("query") || !value.has("type")) {
+      logError("Invalid DSL vector field argument. Refer to examples for more information.");
+      SearchResponse searchResponse = new SearchResponse();
+      searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+      return searchResponse;
     }
+    List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
+    if (value.get("type").toString().equals("float")) {
+      JSONArray arr = (JSONArray) value.get("query");
+      for (int i = 0; i < arr.length(); i++) {
+        JSONArray innerArr = (JSONArray) (arr.get(i));
+        List<Float> floatList = new ArrayList<>();
+        for (int j = 0; j < innerArr.length(); j++) {
+          Double num = (Double) innerArr.get(j);
+          floatList.add(num.floatValue());
+        }
+        VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
+            .addAllFloatData(floatList)
+            .build();
+        vectorRowRecordList.add(rowRecord);
+      }
+    } else if (value.get("type").toString().equals("binary")) {
+      // get from placeholder map
+      Map<String, List<ByteBuffer>> binaryEntities = searchParam.getBinaryEntities();
+      String placeholder = value.get("query").toString();
+      if (!binaryEntities.containsKey(placeholder)) {
+        logError("Binary query vector placeholder `{}` not found in map"
+            + ". Refer to examples for more information.", placeholder);
+        SearchResponse searchResponse = new SearchResponse();
+        searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+        return searchResponse;
+      }
+      List<ByteBuffer> query = binaryEntities.get(placeholder);
+      for (ByteBuffer byteBuffer : query) {
+        ((Buffer) byteBuffer).rewind();
+        VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
+            .setBinaryData(ByteString.copyFrom(byteBuffer))
+            .build();
+        vectorRowRecordList.add(rowRecord);
+      }
+    } else {
+      logError("DSL vector type must be float or binary. Refer to examples for more information.");
+      SearchResponse searchResponse = new SearchResponse();
+      searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+      return searchResponse;
+    }
+
+    VectorRecord vectorRecord =
+        VectorRecord.newBuilder()
+            .addAllRecords(vectorRowRecordList)
+            .build();
+
+    JSONObject json = new JSONObject();
+    value.remove("type");
+    value.remove("query");
+    json.put("placeholder", outer);
+    VectorParam vectorParam =
+        VectorParam.newBuilder()
+            .setJson(json.toString())
+            .setRowRecord(vectorRecord)
+            .build();
+    vectorParamList.add(vectorParam);
 
     KeyValuePair extraParam =
         KeyValuePair.newBuilder()
@@ -901,7 +879,7 @@ public class MilvusGrpcClient implements MilvusClient {
     io.milvus.grpc.SearchParam request =
         io.milvus.grpc.SearchParam.newBuilder()
             .setCollectionName(searchParam.getCollectionName())
-            .setDsl(json1.toString())
+            .setDsl(jsonObject.toString())
             .addAllVectorParam(vectorParamList)
             .addAllPartitionTagArray(searchParam.getPartitionTags())
             .addExtraParams(extraParam)
@@ -948,112 +926,90 @@ public class MilvusGrpcClient implements MilvusClient {
 
     // convert DSL to json object and parse to extract vectors
     List<VectorParam> vectorParamList = new ArrayList<>();
-    Map<String, JSONObject> vecMap = new HashMap<>();
-    Map<String, String> nameMap = new HashMap<>();
-    int currKey = 0;
-    JSONObject json1;
+    JSONObject jsonObject;
+    List<Object> parsedDSL;
     try {
-      json1 = new JSONObject(searchParam.getDSL());
-      Iterator<String> keys1 = json1.keys();
-      while (keys1.hasNext()) {
-        String key1 = keys1.next(); // "bool"
-        JSONObject json2 = (JSONObject) json1.get(key1);
-        Iterator<String> keys2 = json2.keys();
-        while (keys2.hasNext()) {
-          String key2 = keys2.next(); // "must"
-          JSONArray json3 = (JSONArray) json2.get(key2);
-          // loop over array of "term", "range" and "vector"
-          for (int i = 0; i < json3.length(); i++) {
-            JSONObject json4 = json3.getJSONObject(i);
-            Iterator<String> keys4 = json4.keys();
-            while (keys4.hasNext()) {
-              String key4 = keys4.next(); // term/range/vector
-              if (!key4.equals("vector")) continue;
-              JSONObject json5 = (JSONObject) json4.get(key4);
-              // replace JSONObject by a placeholder string
-              vecMap.put(Integer.toString(currKey), new JSONObject(json5.toString()));
-              Iterator<String> keys5 = json5.keys();
-              nameMap.put(Integer.toString(currKey), keys5.next());
-              json4.put(key4, Integer.toString(currKey));
-              currKey++;
-            }
-          }
-        }
-      }
+      jsonObject = new JSONObject(searchParam.getDSL());
+      parsedDSL = parseDSL(jsonObject);
     } catch (JSONException err){
       logError("DSL must be in correct json format. Refer to examples for more information.");
       SearchResponse searchResponse = new SearchResponse();
       searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT, err.toString()));
       return Futures.immediateFuture(searchResponse);
     }
+    if (parsedDSL.size() != 3) {
+      logError("DSL must include vector query. Refer to examples for more information.");
+      SearchResponse searchResponse = new SearchResponse();
+      searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+      return Futures.immediateFuture(searchResponse);
+    }
 
     // use placeholder and vectors to create VectorParam list
-    for (Map.Entry<String, JSONObject> entry : vecMap.entrySet()) {
-      String key = entry.getKey();
-      JSONObject value = (JSONObject) entry.getValue().get(nameMap.get(key));
-      if (!value.has("topk") || !value.has("query") || !value.has("type")) {
-        logError("Invalid DSL vector field argument. Refer to examples for more information.");
-        SearchResponse searchResponse = new SearchResponse();
-        searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
-        return Futures.immediateFuture(searchResponse);
-      }
-      List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-      if (value.get("type").toString().equals("float")) {
-        JSONArray arr = (JSONArray) value.get("query");
-        for (int i = 0; i < arr.length(); i++) {
-          JSONArray innerArr = (JSONArray) (arr.get(i));
-          List<Float> floatList = new ArrayList<>();
-          for (int j = 0; j < innerArr.length(); j++) {
-            Double num = (Double) innerArr.get(j);
-            floatList.add(num.floatValue());
-          }
-          VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-              .addAllFloatData(floatList)
-              .build();
-          vectorRowRecordList.add(rowRecord);
-        }
-      } else if (value.get("type").toString().equals("binary")) {
-        // get from placeholder map
-        Map<String, List<ByteBuffer>> binaryEntities = searchParam.getBinaryEntities();
-        String placeholder = value.get("query").toString();
-        if (!binaryEntities.containsKey(placeholder)) {
-          logError("Binary query vector placeholder `{}` not found in map"
-              + ". Refer to examples for more information.", placeholder);
-          SearchResponse searchResponse = new SearchResponse();
-          searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
-          return Futures.immediateFuture(searchResponse);
-        }
-        List<ByteBuffer> query = binaryEntities.get(placeholder);
-        for (ByteBuffer byteBuffer : query) {
-          ((Buffer) byteBuffer).rewind();
-          VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-              .setBinaryData(ByteString.copyFrom(byteBuffer))
-              .build();
-          vectorRowRecordList.add(rowRecord);
-        }
-      } else {
-        logError("DSL vector type must be float or binary. Refer to examples for more information.");
-        SearchResponse searchResponse = new SearchResponse();
-        searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
-        return Futures.immediateFuture(searchResponse);
-      }
-
-      VectorRecord vectorRecord =
-          VectorRecord.newBuilder()
-              .addAllRecords(vectorRowRecordList)
-              .build();
-
-      JSONObject jsonObject = new JSONObject();
-      value.remove("type");
-      value.remove("query");
-      jsonObject.put(key, entry.getValue());
-      VectorParam vectorParam =
-          VectorParam.newBuilder()
-              .setJson(jsonObject.toString())
-              .setRowRecord(vectorRecord)
-              .build();
-      vectorParamList.add(vectorParam);
+    String key = parsedDSL.get(2).toString();
+    JSONObject outer = (JSONObject) parsedDSL.get(1);
+    JSONObject value = (JSONObject) outer.get(key);
+    if (!value.has("topk") || !value.has("query") || !value.has("type")) {
+      logError("Invalid DSL vector field argument. Refer to examples for more information.");
+      SearchResponse searchResponse = new SearchResponse();
+      searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+      return Futures.immediateFuture(searchResponse);
     }
+    List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
+    if (value.get("type").toString().equals("float")) {
+      JSONArray arr = (JSONArray) value.get("query");
+      for (int i = 0; i < arr.length(); i++) {
+        JSONArray innerArr = (JSONArray) (arr.get(i));
+        List<Float> floatList = new ArrayList<>();
+        for (int j = 0; j < innerArr.length(); j++) {
+          Double num = (Double) innerArr.get(j);
+          floatList.add(num.floatValue());
+        }
+        VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
+            .addAllFloatData(floatList)
+            .build();
+        vectorRowRecordList.add(rowRecord);
+      }
+    } else if (value.get("type").toString().equals("binary")) {
+      // get from placeholder map
+      Map<String, List<ByteBuffer>> binaryEntities = searchParam.getBinaryEntities();
+      String placeholder = value.get("query").toString();
+      if (!binaryEntities.containsKey(placeholder)) {
+        logError("Binary query vector placeholder `{}` not found in map"
+            + ". Refer to examples for more information.", placeholder);
+        SearchResponse searchResponse = new SearchResponse();
+        searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+        return Futures.immediateFuture(searchResponse);
+      }
+      List<ByteBuffer> query = binaryEntities.get(placeholder);
+      for (ByteBuffer byteBuffer : query) {
+        ((Buffer) byteBuffer).rewind();
+        VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
+            .setBinaryData(ByteString.copyFrom(byteBuffer))
+            .build();
+        vectorRowRecordList.add(rowRecord);
+      }
+    } else {
+      logError("DSL vector type must be float or binary. Refer to examples for more information.");
+      SearchResponse searchResponse = new SearchResponse();
+      searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
+      return Futures.immediateFuture(searchResponse);
+    }
+
+    VectorRecord vectorRecord =
+        VectorRecord.newBuilder()
+            .addAllRecords(vectorRowRecordList)
+            .build();
+
+    JSONObject json = new JSONObject();
+    value.remove("type");
+    value.remove("query");
+    json.put("placeholder", outer);
+    VectorParam vectorParam =
+        VectorParam.newBuilder()
+            .setJson(json.toString())
+            .setRowRecord(vectorRecord)
+            .build();
+    vectorParamList.add(vectorParam);
 
     KeyValuePair extraParam =
         KeyValuePair.newBuilder()
@@ -1064,7 +1020,7 @@ public class MilvusGrpcClient implements MilvusClient {
     io.milvus.grpc.SearchParam request =
         io.milvus.grpc.SearchParam.newBuilder()
             .setCollectionName(searchParam.getCollectionName())
-            .setDsl(json1.toString())
+            .setDsl(jsonObject.toString())
             .addAllVectorParam(vectorParamList)
             .addAllPartitionTagArray(searchParam.getPartitionTags())
             .addExtraParams(extraParam)
@@ -1796,6 +1752,36 @@ public class MilvusGrpcClient implements MilvusClient {
       jsonObject.put(keyValuePair.getKey(), keyValuePair.getValue());
     }
     return jsonObject.toString();
+  }
+
+  private List<Object> parseDSL(JSONObject dsl) {
+    Iterator<String> keys = dsl.keys();
+    while (keys.hasNext()) {
+      String key = keys.next();
+      if (key.equals("vector")) {
+        // replace dsl vector data by a placeholder string
+        List<Object> res = new ArrayList<>();
+        JSONObject vecData = (JSONObject) dsl.get(key);
+        String name = vecData.keys().next();
+        dsl.put(key, "placeholder");
+        res.add(dsl);
+        res.add(vecData);
+        res.add(name);
+        return res;
+      }
+      if (dsl.get(key).getClass() == JSONObject.class) {
+        List<Object> res = parseDSL((JSONObject) dsl.get(key));
+        if (res.size() > 0) return res;
+      } else if (dsl.get(key).getClass() == JSONArray.class) {
+        JSONArray arr = (JSONArray) dsl.get(key);
+        for (int i = 0; i < arr.length(); i++) {
+          JSONObject jsonObject = arr.getJSONObject(i);
+          List<Object> res = parseDSL(jsonObject);
+          if (res.size() > 0) return res;
+        }
+      }
+    }
+    return new ArrayList<>();
   }
 
   ///////////////////// Log Functions//////////////////////

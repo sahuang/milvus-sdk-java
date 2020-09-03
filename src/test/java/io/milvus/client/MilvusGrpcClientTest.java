@@ -101,13 +101,11 @@ class MilvusClientTest {
     return String.format(
         "{\"bool\": {"
             + "\"must\": [{"
-            + "    \"range\": {"
-            + "        \"float\": {\"GT\": -10, \"LT\": 100}"
-            + "    }},{"
-            + "    \"vector\": {"
-            + "        \"float_vec\": {"
-            + "            \"topk\": %d, \"metric_type\": \"L2\", \"type\": \"float\", \"query\": %s, \"params\": {\"nprobe\": 20}"
-            + "    }}}]}}",
+            + "    \"must\": [{"
+            + "        \"vector\": {"
+            + "            \"float_vec\": {"
+            + "                \"topk\": %d, \"metric_type\": \"L2\", \"type\": \"float\", \"query\": %s, \"params\": {\"nprobe\": 20}"
+            + "}}}]}]}}",
         topK, query);
   }
 

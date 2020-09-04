@@ -516,6 +516,21 @@ class MilvusClientTest {
     assertTrue(insertResponse.ok());
     assertEquals(size, insertResponse.getEntityIds().size());
 
+    Index index =
+        new Index.Builder(binaryCollectionName, "binary_vec")
+            .withParamsInJson(new JsonBuilder().param("index_type", "BIN_IVF_FLAT")
+                .param("metric_type", "JACCARD")
+                .indexParam("nlist", 100)
+                .build())
+            .build();
+
+    Response createIndexResponse = client.createIndex(index);
+    assertTrue(createIndexResponse.ok());
+
+    // also test drop index here
+    Response dropIndexResponse = client.dropIndex(binaryCollectionName, "binary_vec");
+    assertTrue(dropIndexResponse.ok());
+
     assertTrue(client.dropCollection(binaryCollectionName).ok());
   }
 

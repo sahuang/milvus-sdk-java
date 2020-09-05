@@ -19,7 +19,6 @@
 
 package io.milvus.client;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,7 +30,6 @@ public class SearchParam {
 
   private final String collectionName;
   private final String dsl;
-  private final Map<String, List<ByteBuffer>> binaryEntities;
   private final List<String> partitionTags;
   private final String paramsInJson;
 
@@ -40,7 +38,6 @@ public class SearchParam {
     this.dsl = builder.dsl;
     this.partitionTags = builder.partitionTags;
     this.paramsInJson = builder.paramsInJson;
-    this.binaryEntities = builder.binaryEntities;
   }
 
   public String getCollectionName() {
@@ -48,8 +45,6 @@ public class SearchParam {
   }
 
   public String getDSL() { return dsl; }
-
-  public Map<String, List<ByteBuffer>> getBinaryEntities() { return binaryEntities; }
 
   public List<String> getPartitionTags() {
     return partitionTags;
@@ -68,7 +63,6 @@ public class SearchParam {
     private List<String> partitionTags = new ArrayList<>();
     private String dsl = "{}";
     private String paramsInJson = "{}";
-    private Map<String, List<ByteBuffer>> binaryEntities = new HashMap<>();
 
     /** @param collectionName collection to search from */
     public Builder(@Nonnull String collectionName) {
@@ -119,34 +113,6 @@ public class SearchParam {
      */
     public SearchParam.Builder withDSL(@Nonnull String dsl) {
       this.dsl = dsl;
-      return this;
-    }
-
-    /**
-     * Optional. Default to empty map. Due to the nature of <code>ByteBuffer</code>, it is not
-     * feasible to pass binary entities as raw query vectors in DSL statement.
-     * JSON strings cannot be parsed back to <code>List<ByteBuffer></code> object.
-     * <p>The map will take user-defined name (placeholder) as the key, and list of query vectors
-     * as the value. When building DSL statement, use the placeholder instead of raw entities
-     * in "query".</p>
-     * <pre>
-     * For example, for float vectors we have
-     * <code>
-     *   {"topk": 10, "type": "float", "query": vecs, "params": {"nprobe": 10}}
-     * </code>
-     * While for binary vectors we have
-     * <code>
-     *   {"topk": 10, "type": "binary", "query": "placeholder", "params": {"nprobe": 10}}
-     * </code>
-     * And in <code>binaryEntities</code>, we have a key-value pair of ("placeholder", vecs).
-     * </pre>
-     *
-     * @param binaryEntities a <code>Map</code> of placeholders to query binary vectors. If using
-     *                       float data, this builder is not needed.
-     * @return <code>Builder</code>
-     */
-    public SearchParam.Builder withBinaryEntities(@Nonnull Map<String, List<ByteBuffer>> binaryEntities) {
-      this.binaryEntities = binaryEntities;
       return this;
     }
 

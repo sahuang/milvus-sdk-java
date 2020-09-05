@@ -29,9 +29,9 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.milvus.grpc.*;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import javax.annotation.Nonnull;
+import org.apache.commons.lang3.ArrayUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -572,10 +573,13 @@ public class MilvusGrpcClient implements MilvusClient {
           }
           vectorBuilder.addAllRecords(vectorRowRecordList);
         } else if (dataType == DataType.VECTOR_BINARY) {
-          List<ByteBuffer> binaryList = (List<ByteBuffer>) map.get("values");
+          List<List<Byte>> binaryVectors = (List<List<Byte>>) map.get("values");
           List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-          for (ByteBuffer byteBuffer : binaryList) {
-            ((Buffer) byteBuffer).rewind();
+          for (List<Byte> binaryVector : binaryVectors) {
+            ByteBuffer byteBuffer = ByteBuffer.allocate(binaryVector.size());
+            for (int i = 0; i < binaryVector.size(); i++) {
+              byteBuffer = byteBuffer.put(i, binaryVector.get(i));
+            }
             vectorRowRecordList.add(
                 VectorRowRecord.newBuilder()
                     .setBinaryData(ByteString.copyFrom(byteBuffer))
@@ -686,10 +690,13 @@ public class MilvusGrpcClient implements MilvusClient {
           }
           vectorBuilder.addAllRecords(vectorRowRecordList);
         } else if (dataType == DataType.VECTOR_BINARY) {
-          List<ByteBuffer> binaryList = (List<ByteBuffer>) map.get("values");
+          List<List<Byte>> binaryVectors = (List<List<Byte>>) map.get("values");
           List<VectorRowRecord> vectorRowRecordList = new ArrayList<>();
-          for (ByteBuffer byteBuffer : binaryList) {
-            ((Buffer) byteBuffer).rewind();
+          for (List<Byte> binaryVector : binaryVectors) {
+            ByteBuffer byteBuffer = ByteBuffer.allocate(binaryVector.size());
+            for (int i = 0; i < binaryVector.size(); i++) {
+              byteBuffer = byteBuffer.put(i, binaryVector.get(i));
+            }
             vectorRowRecordList.add(
                 VectorRowRecord.newBuilder()
                     .setBinaryData(ByteString.copyFrom(byteBuffer))
@@ -823,29 +830,23 @@ public class MilvusGrpcClient implements MilvusClient {
           Double num = (Double) innerArr.get(j);
           floatList.add(num.floatValue());
         }
-        VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-            .addAllFloatData(floatList)
-            .build();
-        vectorRowRecordList.add(rowRecord);
+        vectorRowRecordList.add(
+            VectorRowRecord.newBuilder()
+                .addAllFloatData(floatList)
+                .build());
       }
     } else if (value.get("type").toString().equals("binary")) {
-      // get from placeholder map
-      Map<String, List<ByteBuffer>> binaryEntities = searchParam.getBinaryEntities();
-      String placeholder = value.get("query").toString();
-      if (!binaryEntities.containsKey(placeholder)) {
-        logError("Binary query vector placeholder `{}` not found in map"
-            + ". Refer to examples for more information.", placeholder);
-        SearchResponse searchResponse = new SearchResponse();
-        searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
-        return searchResponse;
-      }
-      List<ByteBuffer> query = binaryEntities.get(placeholder);
-      for (ByteBuffer byteBuffer : query) {
-        ((Buffer) byteBuffer).rewind();
-        VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-            .setBinaryData(ByteString.copyFrom(byteBuffer))
-            .build();
-        vectorRowRecordList.add(rowRecord);
+      JSONArray arr = (JSONArray) value.get("query");
+      for (int i = 0; i < arr.length(); i++) {
+        JSONArray innerArr = (JSONArray) (arr.get(i));
+        ByteBuffer byteBuffer = ByteBuffer.allocate(innerArr.length());
+        for (int j = 0; j < innerArr.length(); j++) {
+          byteBuffer = byteBuffer.put(j, ((Integer) innerArr.get(j)).byteValue());
+        }
+        vectorRowRecordList.add(
+            VectorRowRecord.newBuilder()
+                .setBinaryData(ByteString.copyFrom(byteBuffer))
+                .build());
       }
     } else {
       logError("DSL vector type must be float or binary. Refer to examples for more information.");
@@ -964,29 +965,23 @@ public class MilvusGrpcClient implements MilvusClient {
           Double num = (Double) innerArr.get(j);
           floatList.add(num.floatValue());
         }
-        VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-            .addAllFloatData(floatList)
-            .build();
-        vectorRowRecordList.add(rowRecord);
+        vectorRowRecordList.add(
+            VectorRowRecord.newBuilder()
+                .addAllFloatData(floatList)
+                .build());
       }
     } else if (value.get("type").toString().equals("binary")) {
-      // get from placeholder map
-      Map<String, List<ByteBuffer>> binaryEntities = searchParam.getBinaryEntities();
-      String placeholder = value.get("query").toString();
-      if (!binaryEntities.containsKey(placeholder)) {
-        logError("Binary query vector placeholder `{}` not found in map"
-            + ". Refer to examples for more information.", placeholder);
-        SearchResponse searchResponse = new SearchResponse();
-        searchResponse.setResponse(new Response(Response.Status.ILLEGAL_ARGUMENT));
-        return Futures.immediateFuture(searchResponse);
-      }
-      List<ByteBuffer> query = binaryEntities.get(placeholder);
-      for (ByteBuffer byteBuffer : query) {
-        ((Buffer) byteBuffer).rewind();
-        VectorRowRecord rowRecord = VectorRowRecord.newBuilder()
-            .setBinaryData(ByteString.copyFrom(byteBuffer))
-            .build();
-        vectorRowRecordList.add(rowRecord);
+      JSONArray arr = (JSONArray) value.get("query");
+      for (int i = 0; i < arr.length(); i++) {
+        JSONArray innerArr = (JSONArray) (arr.get(i));
+        ByteBuffer byteBuffer = ByteBuffer.allocate(innerArr.length());
+        for (int j = 0; j < innerArr.length(); j++) {
+          byteBuffer = byteBuffer.put(j, ((Integer) innerArr.get(j)).byteValue());
+        }
+        vectorRowRecordList.add(
+            VectorRowRecord.newBuilder()
+                .setBinaryData(ByteString.copyFrom(byteBuffer))
+                .build());
       }
     } else {
       logError("DSL vector type must be float or binary. Refer to examples for more information.");
@@ -1383,8 +1378,10 @@ public class MilvusGrpcClient implements MilvusClient {
               if (vectorRowRecordList.get(j).getFloatDataCount() > 0) {
                 fieldsMap.get(j).put(fieldName, vectorRowRecordList.get(j).getFloatDataList());
               } else {
-                fieldsMap.get(j).put(fieldName,
-                    vectorRowRecordList.get(j).getBinaryData().asReadOnlyByteBuffer());
+                ByteBuffer bb = vectorRowRecordList.get(j).getBinaryData().asReadOnlyByteBuffer();
+                byte[] b = new byte[bb.remaining()];
+                bb.get(b);
+                fieldsMap.get(j).put(fieldName, Arrays.asList(ArrayUtils.toObject(b)));
               }
             }
           }
@@ -1704,8 +1701,10 @@ public class MilvusGrpcClient implements MilvusClient {
             if (vectorRowRecordList.get(j).getFloatDataCount() > 0) {
               fieldsMap.get(j).put(fieldName, vectorRowRecordList.get(j).getFloatDataList());
             } else {
-              fieldsMap.get(j).put(fieldName,
-                  vectorRowRecordList.get(j).getBinaryData().asReadOnlyByteBuffer());
+              ByteBuffer bb = vectorRowRecordList.get(j).getBinaryData().asReadOnlyByteBuffer();
+              byte[] b = new byte[bb.remaining()];
+              bb.get(b);
+              fieldsMap.get(j).put(fieldName, Arrays.asList(ArrayUtils.toObject(b)));
             }
           }
         }

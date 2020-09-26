@@ -1328,7 +1328,7 @@ public class MilvusGrpcClient implements MilvusClient {
     if (!channelIsReadyOrIdle()) {
       logWarning("You are not connected to Milvus server");
       return new GetEntityByIDResponse(
-          new Response(Response.Status.CLIENT_NOT_CONNECTED), Collections.emptyList(), null);
+          new Response(Response.Status.CLIENT_NOT_CONNECTED), Collections.emptyList());
     }
 
     EntityIdentity request =
@@ -1346,19 +1346,16 @@ public class MilvusGrpcClient implements MilvusClient {
 
         logInfo("getEntityByID in collection `{}` returned successfully!", collectionName);
 
-        List<Long> validIds = new ArrayList<>();
         List<Map<String, Object>> fieldsMap = new ArrayList<>();
         List<Boolean> isValid = response.getValidRowList();
         for (int i = 0; i < isValid.size(); i++) {
-          if (isValid.get(i)) {
-            validIds.add(ids.get(i));
-            fieldsMap.add(new HashMap<>());
-          }
+          fieldsMap.add(new HashMap<>());
         }
         List<FieldValue> fieldValueList = response.getFieldsList();
         for (FieldValue fieldValue : fieldValueList) {
           String fieldName = fieldValue.getFieldName();
-          for (int j = 0; j < validIds.size(); j++) {
+          for (int j = 0; j < isValid.size(); j++) {
+            if (!isValid.get(j)) continue;
             if (fieldValue.getAttrRecord().getInt32ValueCount() > 0) {
               fieldsMap.get(j)
                   .put(fieldName, fieldValue.getAttrRecord().getInt32ValueList().get(j));
@@ -1387,7 +1384,7 @@ public class MilvusGrpcClient implements MilvusClient {
           }
         }
         return new GetEntityByIDResponse(
-            new Response(Response.Status.SUCCESS), validIds, fieldsMap);
+            new Response(Response.Status.SUCCESS), fieldsMap);
 
       } else {
         logError(
@@ -1398,13 +1395,12 @@ public class MilvusGrpcClient implements MilvusClient {
             new Response(
                 Response.Status.valueOf(response.getStatus().getErrorCodeValue()),
                 response.getStatus().getReason()),
-            Collections.emptyList(),
-            null);
+            Collections.emptyList());
       }
     } catch (StatusRuntimeException e) {
       logError("getEntityByID RPC failed:\n{}", e.getStatus().toString());
       return new GetEntityByIDResponse(
-          new Response(Response.Status.RPC_ERROR, e.toString()), Collections.emptyList(), null);
+          new Response(Response.Status.RPC_ERROR, e.toString()), Collections.emptyList());
     }
   }
 

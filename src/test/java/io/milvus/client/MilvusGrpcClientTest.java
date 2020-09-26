@@ -117,9 +117,6 @@ class MilvusClientTest {
     return String.format(
         "{\"bool\": {"
             + "\"must\": [{"
-            + "    \"range\": {"
-            + "        \"float\": {\"GT\": -10, \"LT\": 100}"
-            + "    }},{"
             + "    \"vector\": {"
             + "        \"binary_vec\": {"
             + "            \"topk\": %d, \"metric_type\": \"JACCARD\", \"type\": \"binary\", \"query\": %s, \"params\": {\"nprobe\": 20}"
@@ -662,7 +659,7 @@ class MilvusClientTest {
 
   @org.junit.jupiter.api.Test
   void searchBinary() {
-    final int binaryDimension = 10000;
+    final int binaryDimension = 64;
 
     String binaryCollectionName = generator.generate(10);
     CollectionMapping collectionMapping =
@@ -710,8 +707,6 @@ class MilvusClientTest {
     SearchParam searchParam =
         new SearchParam.Builder(binaryCollectionName)
             .withDSL(generateComplexDSLBinary(topK, vectorsToSearch.toString()))
-            .withParamsInJson(new JsonBuilder().param("fields",
-                new ArrayList<>(Arrays.asList("int64", "float"))).build())
             .build();
     SearchResponse searchResponse = client.search(searchParam);
     assertTrue(searchResponse.ok());
@@ -850,7 +845,6 @@ class MilvusClientTest {
     GetEntityByIDResponse getEntityByIDResponse =
         client.getEntityByID(randomCollectionName, entityIds.subList(0, 100));
     assertTrue(getEntityByIDResponse.ok());
-    assertEquals(getEntityByIDResponse.getValidIds(), entityIds.subList(0, 100));
     int vecIndex = 0;
     List<Map<String, Object>> fieldsMap = getEntityByIDResponse.getFieldsMap();
     assertTrue(fieldsMap.get(vecIndex).get("float_vec") instanceof List);
@@ -892,7 +886,7 @@ class MilvusClientTest {
     GetEntityByIDResponse getEntityByIDResponse =
         client.getEntityByID(binaryCollectionName, entityIds.subList(0, 100));
     assertTrue(getEntityByIDResponse.ok());
-    assertEquals(getEntityByIDResponse.getValidIds(), entityIds.subList(0, 100));
+    assertEquals(getEntityByIDResponse.getFieldsMap().size(), 100);
     List<Map<String, Object>> fieldsMap = getEntityByIDResponse.getFieldsMap();
     assertTrue(fieldsMap.get(0).get("binary_vec") instanceof List);
     List<Byte> first = (List<Byte>) (fieldsMap.get(0).get("binary_vec"));

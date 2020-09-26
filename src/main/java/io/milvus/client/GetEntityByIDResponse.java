@@ -9,24 +9,17 @@ import java.util.Map;
  */
 public class GetEntityByIDResponse {
   private final Response response;
-  private List<Long> validIds;
   private List<Map<String, Object>> fieldsMap;
 
   GetEntityByIDResponse(
-      Response response, List<Long> validIds, List<Map<String, Object>> fieldsMap) {
+      Response response, List<Map<String, Object>> fieldsMap) {
     this.response = response;
-    this.validIds = validIds;
     this.fieldsMap = fieldsMap;
   }
 
-  /** @return A <code>List</code> of ids that are valid, i.e. present in your collections. This will
-   * be a subset of the ids passed into <code>getEntityByID</code>.
-   */
-  public List<Long> getValidIds() { return validIds; }
-
   /**
    * @return A <code>List</code> of map with fields information. The list order corresponds
-   * to <code>validIds</code>. Each <code>Map</code> maps field names to records in a row.
+   * to query IDs. Each <code>Map</code> maps field names to records in a row.
    * The record object can be one of int, long, float, double, List<Float> or List<Byte>
    * depending on the field's <code>DataType</code> you specified.
    */
